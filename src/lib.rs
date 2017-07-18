@@ -75,6 +75,14 @@ pub struct Face {
     pub edge_index: EdgeIndex,
 }
 
+impl Face {
+    pub fn new(edge_index: EdgeIndex) -> Face {
+        Face {
+            edge_index
+        }
+    }
+}
+
 impl Validation for Face {
     /// A face is considered "valid" as long as it has an edge index
     /// other than `INVALID_COMPONENT_INDEX`
@@ -92,26 +100,59 @@ pub struct Mesh {
     pub faces: Vec<Face>
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_edge_is_invalid() {
-        let edge = Edge::default();
-        assert!(edge.is_valid() == false);
-    }
-
-    #[test]
-    fn default_vertex_is_invalid() {
-        let vertex = Vertex::default();
-        assert!(vertex.is_valid() == false);
-    }
-
-    #[test]
-    fn default_face_is_invalid() {
-        let face = Face::default();
-        assert!(face.is_valid() == false);
+impl Mesh {
+    /// Creates a new Mesh with an initial component added to each Vec.
+    ///
+    /// The idea behind having a single invalid component at the front of each
+    /// Vec comes from the blog http://ourmachinery.com/post/defaulting-to-zero/
+    pub fn new() -> Mesh {
+        Mesh {
+            edges: vec! [
+                Edge::default()
+            ],
+            vertices: vec! [
+                Vertex::default()
+            ],
+            faces: vec! [
+                Face::default()
+            ]
+        }
     }
 }
+
+impl<'a> IntoIterator for &'a Mesh {
+    type Item = &'a Face;
+    type IntoIter = FaceIterator<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        FaceIterator::new(&self.faces)
+    }
+}
+
+pub struct FaceIterator<'a> {
+    faces: &'a Vec<Face>,
+    previous_index: FaceIndex
+}
+
+impl<'a> FaceIterator<'a> {
+    pub fn new(faces: &'a Vec<Face>) -> FaceIterator {
+        FaceIterator {
+            faces: faces,
+            previous_index: 0
+        }
+    }
+}
+
+impl<'a> Iterator for FaceIterator<'a> {
+    type Item = &'a Face;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.previous_index += 1;
+
+        self.faces.get(self.previous_index)
+    }
+}
+
+
+#[cfg(test)]
+mod tests;
