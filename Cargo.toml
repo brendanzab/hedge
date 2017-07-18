@@ -1,0 +1,6 @@
+[package]
+name = "hedge"
+version = "0.1.0"
+authors = ["Chip Collier <photex@gmail.com>"]
+
+[dependencies]
