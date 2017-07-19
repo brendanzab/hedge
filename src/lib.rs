@@ -3,6 +3,8 @@
 //! This is an implementation of an index based half-edge mesh facility.
 //!
 
+use std::fmt;
+
 
 /// An interface for asserting the validity of components in the mesh.
 pub trait Validation {
@@ -17,6 +19,9 @@ pub const INVALID_COMPONENT_INDEX: usize = 0;
 /// Type alias for indices into vertex storage
 pub type VertexIndex = usize;
 
+/// Type alias for indices into vertex attribute storage
+pub type VertexAttributeIndex = usize;
+
 /// Type alias for indices into edge storage
 pub type EdgeIndex = usize;
 
@@ -25,18 +30,20 @@ pub type FaceIndex = usize;
 
 
 /// Represents the point where two edges meet.
-// TODO: Use generics for arbitrary vertex formats/data
 #[derive(Default, Debug)]
 pub struct Vertex {
     /// Index of the outgoing edge
     pub edge_index: EdgeIndex,
+    /// Index of this vertex's attributes
+    pub attr_index: VertexAttributeIndex,
 }
 
 impl Validation for Vertex {
     /// A vertex is considered "valid" as long as it as an edge index
     /// other than `INVALID_COMPONENT_INDEX`
     fn is_valid(&self) -> bool {
-        self.edge_index != INVALID_COMPONENT_INDEX
+        self.edge_index != INVALID_COMPONENT_INDEX &&
+            self.attr_index != INVALID_COMPONENT_INDEX
     }
 }
 
@@ -91,13 +98,27 @@ impl Validation for Face {
     }
 }
 
+/// Function set for operations related to the Face struct
+#[derive(Debug)]
+pub struct FaceFn<'a>
+{
+    mesh: &'a Mesh,
+    pub index: FaceIndex
+}
 
 /// Implements the fundamental storage operations and represents the principle
 /// grouping of all components.
 pub struct Mesh {
-    pub edges: Vec<Edge>,
-    pub vertices: Vec<Vertex>,
-    pub faces: Vec<Face>
+    pub edge_list: Vec<Edge>,
+    pub vertex_list: Vec<Vertex>,
+    pub face_list: Vec<Face>
+}
+
+impl fmt::Debug for Mesh {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Half-Edge Mesh {{ {} vertices, {} edges, {} faces }}",
+               self.vertex_list.len(), self.edge_list.len(), self.face_list.len())
+    }
 }
 
 impl Mesh {
@@ -107,15 +128,31 @@ impl Mesh {
     /// Vec comes from the blog http://ourmachinery.com/post/defaulting-to-zero/
     pub fn new() -> Mesh {
         Mesh {
-            edges: vec! [
+            edge_list: vec! [
                 Edge::default()
             ],
-            vertices: vec! [
+            vertex_list: vec! [
                 Vertex::default()
             ],
-            faces: vec! [
+            face_list: vec! [
                 Face::default()
             ]
+        }
+    }
+
+    pub fn face(&self, index: FaceIndex) -> &Face {
+        if let Some(result) = self.face_list.get(index) {
+            result
+        } else {
+            &self.face_list[0]
+        }
+    }
+
+    pub fn face_mut(&mut self, index: FaceIndex) -> Option<&mut Face> {
+        if index == INVALID_COMPONENT_INDEX {
+            None
+        } else {
+            self.face_list.get_mut(index)
         }
     }
 }
@@ -125,19 +162,19 @@ impl<'a> IntoIterator for &'a Mesh {
     type IntoIter = FaceIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        FaceIterator::new(&self.faces)
+        FaceIterator::new(&self)
     }
 }
 
 pub struct FaceIterator<'a> {
-    faces: &'a Vec<Face>,
+    mesh: &'a Mesh,
     previous_index: FaceIndex
 }
 
 impl<'a> FaceIterator<'a> {
-    pub fn new(faces: &'a Vec<Face>) -> FaceIterator {
+    pub fn new(mesh: &'a Mesh) -> FaceIterator {
         FaceIterator {
-            faces: faces,
+            mesh: mesh,
             previous_index: 0
         }
     }
@@ -148,8 +185,7 @@ impl<'a> Iterator for FaceIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.previous_index += 1;
-
-        self.faces.get(self.previous_index)
+        self.mesh.face_list.get(self.previous_index)
     }
 }
 

@@ -1,5 +1,20 @@
 use super::*;
 
+type TestMesh = Mesh;
+
+#[test]
+fn basic_debug_printing() {
+    let edge = Edge::default();
+    println!("{:?}", edge);
+    let vertex = Vertex::default();
+    println!("{:?}", vertex);
+    let face = Face::default();
+    println!("{:?}", face);
+    let mesh = TestMesh::new();
+    println!("{:?}", mesh);
+
+}
+
 #[test]
 fn default_edge_is_invalid() {
     let edge = Edge::default();
@@ -22,27 +37,27 @@ fn default_face_is_invalid() {
 fn initial_mesh_has_default_elements() {
     let mesh = Mesh::new();
     assert! {
-        mesh.edges.len() == 1 &&
-            mesh.edges[0].is_valid() == false
+        mesh.edge_list.len() == 1 &&
+            mesh.edge_list[0].is_valid() == false
     };
     assert! {
-        mesh.vertices.len() == 1 &&
-            mesh.vertices[0].is_valid() == false
+        mesh.vertex_list.len() == 1 &&
+            mesh.vertex_list[0].is_valid() == false
     };
     assert! {
-        mesh.faces.len() == 1 &&
-            mesh.faces[0].is_valid() == false
+        mesh.face_list.len() == 1 &&
+            mesh.face_list[0].is_valid() == false
     };
 }
 
 #[test]
 fn can_iterate_over_faces() {
-    let mut mesh = Mesh::new();
-    mesh.faces.push(Face::new(1));
-    mesh.faces.push(Face::new(4));
-    mesh.faces.push(Face::new(7));
+    let mut mesh = TestMesh::new();
+    mesh.face_list.push(Face::new(1));
+    mesh.face_list.push(Face::new(4));
+    mesh.face_list.push(Face::new(7));
 
-    assert!(mesh.faces.len() == 4);
+    assert!(mesh.face_list.len() == 4);
 
     let mut faces_iterated_over = 0;
 
@@ -52,4 +67,12 @@ fn can_iterate_over_faces() {
     }
 
     assert!(faces_iterated_over == 3);
+}
+
+#[test]
+fn can_iterate_over_edges_of_face() {
+    let mut mesh = TestMesh::new();
+    mesh.face_list.push(Face::new(1));
+    mesh.face_list.push(Face::new(4));
+    mesh.face_list.push(Face::new(7));
 }
