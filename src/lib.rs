@@ -38,6 +38,15 @@ pub struct Vertex {
     pub attr_index: VertexAttributeIndex,
 }
 
+impl Vertex {
+    pub fn new(edge_index: EdgeIndex) -> Vertex {
+        Vertex {
+            edge_index: edge_index,
+            attr_index: INVALID_COMPONENT_INDEX
+        }
+    }
+}
+
 impl Validation for Vertex {
     /// A vertex is considered "valid" as long as it as an edge index
     /// other than `INVALID_COMPONENT_INDEX`
@@ -100,8 +109,7 @@ impl Validation for Face {
 
 /// Function set for operations related to the Face struct
 #[derive(Debug)]
-pub struct FaceFn<'a>
-{
+pub struct FaceFn<'a> {
     mesh: &'a Mesh,
     pub index: FaceIndex
 }
@@ -140,11 +148,35 @@ impl Mesh {
         }
     }
 
+    fn faces(&self) -> FaceIterator {
+        FaceIterator::new(self.face_list.len())
+    }
+
+    fn edges(&self, face: &Face) -> EdgeIterator {
+        EdgeIterator::new(face.edge_index, &self.edge_list)
+    }
+
     pub fn face(&self, index: FaceIndex) -> &Face {
         if let Some(result) = self.face_list.get(index) {
             result
         } else {
             &self.face_list[0]
+        }
+    }
+
+    pub fn edge(&self, index: EdgeIndex) -> &Edge {
+        if let Some(result) = self.edge_list.get(index) {
+            result
+        } else {
+            &self.edge_list[0]
+        }
+    }
+
+    pub fn vertex(&self, index: VertexIndex) -> &Vertex {
+        if let Some(result) = self.vertex_list.get(index) {
+            result
+        } else {
+            &self.vertex_list[0]
         }
     }
 
@@ -155,37 +187,84 @@ impl Mesh {
             self.face_list.get_mut(index)
         }
     }
-}
 
-impl<'a> IntoIterator for &'a Mesh {
-    type Item = &'a Face;
-    type IntoIter = FaceIterator<'a>;
+    pub fn edge_mut(&mut self, index: EdgeIndex) -> Option<&mut Edge> {
+        if index == INVALID_COMPONENT_INDEX {
+            None
+        } else {
+            self.edge_list.get_mut(index)
+        }
+    }
 
-    fn into_iter(self) -> Self::IntoIter {
-        FaceIterator::new(&self)
+    pub fn vertex_mut(&mut self, index: VertexIndex) -> Option<&mut Vertex> {
+        if index == INVALID_COMPONENT_INDEX {
+            None
+        } else {
+            self.vertex_list.get_mut(index)
+        }
     }
 }
 
-pub struct FaceIterator<'a> {
-    mesh: &'a Mesh,
+pub struct EdgeIterator<'mesh> {
+    edge_list: &'mesh Vec<Edge>,
+    initial_index: EdgeIndex,
+    current_index: EdgeIndex
+}
+
+impl<'mesh> EdgeIterator<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeIterator {
+        EdgeIterator {
+            edge_list: edge_list,
+            initial_index: index,
+            current_index: INVALID_COMPONENT_INDEX
+        }
+    }
+}
+
+impl<'mesh> Iterator for EdgeIterator<'mesh> {
+    type Item = EdgeIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_index == INVALID_COMPONENT_INDEX {
+            self.current_index = self.initial_index;
+            Some(self.current_index)
+        } else {
+            self.edge_list.get(self.current_index).and_then(|current_edge| {
+                self.current_index = current_edge.next_index;
+                if self.current_index == self.initial_index {
+                    None
+                } else {
+                    Some(self.current_index)
+                }
+            })
+        }
+    }
+}
+
+pub struct FaceIterator {
+    face_count: usize,
     previous_index: FaceIndex
 }
 
-impl<'a> FaceIterator<'a> {
-    pub fn new(mesh: &'a Mesh) -> FaceIterator {
+impl FaceIterator {
+    pub fn new(face_count: usize) -> FaceIterator {
         FaceIterator {
-            mesh: mesh,
+            face_count: face_count,
             previous_index: 0
         }
     }
 }
 
-impl<'a> Iterator for FaceIterator<'a> {
-    type Item = &'a Face;
+impl Iterator for FaceIterator {
+    type Item = FaceIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.previous_index += 1;
-        self.mesh.face_list.get(self.previous_index)
+        if self.previous_index >= self.face_count {
+            None
+        } else {
+            Some(self.previous_index)
+        }
     }
 }
 
