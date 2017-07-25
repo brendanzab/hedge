@@ -181,43 +181,52 @@ impl Mesh {
     }
 
     pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
-        let result = self.add_edge(Edge {
-            twin_index: twin,
-            next_index: INVALID_COMPONENT_INDEX,
-            prev_index: INVALID_COMPONENT_INDEX,
-            face_index: INVALID_COMPONENT_INDEX,
-            vertex_index: INVALID_COMPONENT_INDEX
-        });
-
-        //
-
+        let vert = {
+            if let Some(vert) = self.edge_list.get(twin)
+                .and_then(|twin_edge| self.edge_list.get(twin_edge.next_index))
+                .map(|next_twin_edge| next_twin_edge.vertex_index) {
+                    vert
+                } else {
+                    return INVALID_COMPONENT_INDEX;
+                }
+        };
+        let result = self.edge_from_vertex(vert);
+        self.set_twin_edges(result, twin);
         return result;
     }
 
-    pub fn close_edge_loop(&mut self, vert: VertexIndex, next: EdgeIndex, prev: EdgeIndex) -> EdgeIndex {
-        let result = self.add_edge(Edge {
-            twin_index: INVALID_COMPONENT_INDEX,
-            next_index: next,
-            prev_index: prev,
-            face_index: INVALID_COMPONENT_INDEX,
-            vertex_index: vert
-        });
+    pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
+        let result = self.edge_from_vertex(vert);
+        self.connect_edges(prev, result);
+        return result;
+    }
 
+    pub fn close_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex, next: EdgeIndex) -> EdgeIndex {
+        let result = self.edge_from_vertex(vert);
+        self.connect_edges(prev, result);
+        self.connect_edges(result, next);
         return result;
     }
 
     pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
         let result: EdgeIndex = self.edge_list.len();
-
         self.edge_list.push(edge);
-
         return result;
     }
 
     pub fn add_triangle(&mut self, a: VertexIndex, b: VertexIndex, c: VertexIndex) -> FaceIndex {
         let result: FaceIndex = self.face_list.len();
 
-        //let e1 = self.add_edge(Edge {});
+        let e1 = self.edge_from_vertex(a);
+        let e2 = self.extend_edge_loop(b, e1);
+        let e3 = self.close_edge_loop(c, e2, e1);
+
+        self.edge_mut(e1).map(|e| e.face_index = result);
+        self.edge_mut(e2).map(|e| e.face_index = result);
+        self.edge_mut(e3).map(|e| e.face_index = result);
+
+        self.face_list.push(Face::new(e1));
+
         return result;
     }
 
@@ -231,8 +240,8 @@ impl Mesh {
         FaceIterator::new(self.face_list.len())
     }
 
-    pub fn edges(&self, face: &Face) -> FaceEdgeIterator {
-        FaceEdgeIterator::new(face.edge_index, &self.edge_list)
+    pub fn edges(&self, face: &Face) -> EdgeLoopIterator {
+        EdgeLoopIterator::new(face.edge_index, &self.edge_list)
     }
 
     pub fn vertices(&self, face: &Face) -> FaceVertexIterator {
@@ -327,15 +336,15 @@ impl<'mesh> Iterator for FaceVertexIterator<'mesh> {
     }
 }
 
-pub struct FaceEdgeIterator<'mesh> {
+pub struct EdgeLoopIterator<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
-impl<'mesh> FaceEdgeIterator<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> FaceEdgeIterator {
-        FaceEdgeIterator {
+impl<'mesh> EdgeLoopIterator<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopIterator {
+        EdgeLoopIterator {
             edge_list: edge_list,
             initial_index: index,
             current_index: INVALID_COMPONENT_INDEX
@@ -343,7 +352,7 @@ impl<'mesh> FaceEdgeIterator<'mesh> {
     }
 }
 
-impl<'mesh> Iterator for FaceEdgeIterator<'mesh> {
+impl<'mesh> Iterator for EdgeLoopIterator<'mesh> {
     type Item = EdgeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
