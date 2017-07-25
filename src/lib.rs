@@ -51,8 +51,8 @@ impl Validation for Vertex {
     /// A vertex is considered "valid" as long as it as an edge index
     /// other than `INVALID_COMPONENT_INDEX`
     fn is_valid(&self) -> bool {
-        self.edge_index != INVALID_COMPONENT_INDEX &&
-            self.attr_index != INVALID_COMPONENT_INDEX
+        self.edge_index != INVALID_COMPONENT_INDEX /*&&
+            self.attr_index != INVALID_COMPONENT_INDEX*/
     }
 }
 
@@ -152,8 +152,12 @@ impl Mesh {
         FaceIterator::new(self.face_list.len())
     }
 
-    fn edges(&self, face: &Face) -> EdgeIterator {
-        EdgeIterator::new(face.edge_index, &self.edge_list)
+    fn edges(&self, face: &Face) -> FaceEdgeIterator {
+        FaceEdgeIterator::new(face.edge_index, &self.edge_list)
+    }
+
+    fn vertices(&self, face: &Face) -> FaceVertexIterator {
+        FaceVertexIterator::new(face.edge_index, &self.edge_list)
     }
 
     pub fn face(&self, index: FaceIndex) -> &Face {
@@ -205,15 +209,16 @@ impl Mesh {
     }
 }
 
-pub struct EdgeIterator<'mesh> {
+// yeah yeah yeah, I know this is copypasta...
+pub struct FaceVertexIterator<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
-impl<'mesh> EdgeIterator<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeIterator {
-        EdgeIterator {
+impl<'mesh> FaceVertexIterator<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> FaceVertexIterator {
+        FaceVertexIterator {
             edge_list: edge_list,
             initial_index: index,
             current_index: INVALID_COMPONENT_INDEX
@@ -221,7 +226,45 @@ impl<'mesh> EdgeIterator<'mesh> {
     }
 }
 
-impl<'mesh> Iterator for EdgeIterator<'mesh> {
+impl<'mesh> Iterator for FaceVertexIterator<'mesh> {
+    type Item = VertexIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current_index == INVALID_COMPONENT_INDEX {
+            self.current_index = self.initial_index;
+            Some(self.current_index)
+        } else {
+            self.edge_list.get(self.current_index)
+                .and_then(|last_edge| {
+                    self.current_index = last_edge.next_index;
+                    if self.current_index == self.initial_index {
+                        None
+                    } else {
+                        self.edge_list.get(self.current_index)
+                            .map(|current_edge| current_edge.vertex_index)
+                    }
+                })
+        }
+    }
+}
+
+pub struct FaceEdgeIterator<'mesh> {
+    edge_list: &'mesh Vec<Edge>,
+    initial_index: EdgeIndex,
+    current_index: EdgeIndex
+}
+
+impl<'mesh> FaceEdgeIterator<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> FaceEdgeIterator {
+        FaceEdgeIterator {
+            edge_list: edge_list,
+            initial_index: index,
+            current_index: INVALID_COMPONENT_INDEX
+        }
+    }
+}
+
+impl<'mesh> Iterator for FaceEdgeIterator<'mesh> {
     type Item = EdgeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {

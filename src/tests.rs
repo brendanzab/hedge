@@ -121,3 +121,55 @@ fn can_iterate_over_edges_of_face() {
     assert!(faces_iterated_over == 1);
     assert!(edges_iterated_over == 3);
 }
+
+#[test]
+fn can_iterate_over_vertices_of_face() {
+    let mut mesh = TestMesh::new();
+    mesh.vertex_list.push(Vertex::new(1));
+    mesh.vertex_list.push(Vertex::new(2));
+    mesh.vertex_list.push(Vertex::new(3));
+    mesh.edge_list.push(Edge {
+        twin_index: INVALID_COMPONENT_INDEX,
+        next_index: 2,
+        prev_index: 3,
+        face_index: 1,
+        vertex_index: 1
+    });
+    mesh.edge_list.push(Edge {
+        twin_index: INVALID_COMPONENT_INDEX,
+        next_index: 3,
+        prev_index: 1,
+        face_index: 1,
+        vertex_index: 2
+    });
+    mesh.edge_list.push(Edge {
+        twin_index: INVALID_COMPONENT_INDEX,
+        next_index: 1,
+        prev_index: 2,
+        face_index: 1,
+        vertex_index: 3
+    });
+    mesh.face_list.push(Face::new(1));
+
+    assert!(mesh.vertex_list.len() == 4);
+    assert!(mesh.edge_list.len() == 4);
+    assert!(mesh.face_list.len() == 2);
+
+    let mut faces_iterated_over = 0;
+    let mut vertices_iterated_over = 0;
+
+    for face_index in mesh.faces() {
+        let face = mesh.face(face_index);
+        assert!(face.is_valid());
+        faces_iterated_over += 1;
+
+        for vertex_index in mesh.vertices(face) {
+            let vertex = mesh.vertex(vertex_index);
+            assert!(vertex.is_valid());
+            vertices_iterated_over += 1;
+        }
+    }
+
+    assert!(faces_iterated_over == 1);
+    assert!(vertices_iterated_over == 3);
+}
