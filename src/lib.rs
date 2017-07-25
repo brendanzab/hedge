@@ -134,6 +134,9 @@ impl Mesh {
     ///
     /// The idea behind having a single invalid component at the front of each
     /// Vec comes from the blog http://ourmachinery.com/post/defaulting-to-zero/
+    // Not sure though it's something we need to do in Rust given `Option<T>`
+    // however, it's nice to have a simple constant value to represent the
+    // invalid index.
     pub fn new() -> Mesh {
         Mesh {
             edge_list: vec! [
@@ -148,15 +151,91 @@ impl Mesh {
         }
     }
 
-    fn faces(&self) -> FaceIterator {
+    pub fn set_twin_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
+        // TODO: we should verify vertex correlation
+        if let Some(ref mut edge1) = self.edge_mut(e1) {
+            edge1.twin_index = e2;
+        }
+        if let Some(ref mut edge2) = self.edge_mut(e2) {
+            edge2.twin_index = e1;
+        }
+    }
+
+    pub fn connect_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
+        if let Some(ref mut edge1) = self.edge_mut(e1) {
+            edge1.next_index = e2;
+        }
+        if let Some(ref mut edge2) = self.edge_mut(e2) {
+            edge2.prev_index = e1;
+        }
+    }
+
+    pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
+        self.add_edge(Edge {
+            twin_index: INVALID_COMPONENT_INDEX,
+            next_index: INVALID_COMPONENT_INDEX,
+            prev_index: INVALID_COMPONENT_INDEX,
+            face_index: INVALID_COMPONENT_INDEX,
+            vertex_index: vert
+        })
+    }
+
+    pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
+        let result = self.add_edge(Edge {
+            twin_index: twin,
+            next_index: INVALID_COMPONENT_INDEX,
+            prev_index: INVALID_COMPONENT_INDEX,
+            face_index: INVALID_COMPONENT_INDEX,
+            vertex_index: INVALID_COMPONENT_INDEX
+        });
+
+        //
+
+        return result;
+    }
+
+    pub fn close_edge_loop(&mut self, vert: VertexIndex, next: EdgeIndex, prev: EdgeIndex) -> EdgeIndex {
+        let result = self.add_edge(Edge {
+            twin_index: INVALID_COMPONENT_INDEX,
+            next_index: next,
+            prev_index: prev,
+            face_index: INVALID_COMPONENT_INDEX,
+            vertex_index: vert
+        });
+
+        return result;
+    }
+
+    pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
+        let result: EdgeIndex = self.edge_list.len();
+
+        self.edge_list.push(edge);
+
+        return result;
+    }
+
+    pub fn add_triangle(&mut self, a: VertexIndex, b: VertexIndex, c: VertexIndex) -> FaceIndex {
+        let result: FaceIndex = self.face_list.len();
+
+        //let e1 = self.add_edge(Edge {});
+        return result;
+    }
+
+    pub fn add_adjacent_triangle(&mut self, a: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
+        let result: FaceIndex = self.face_list.len();
+
+        return result;
+    }
+
+    pub fn faces(&self) -> FaceIterator {
         FaceIterator::new(self.face_list.len())
     }
 
-    fn edges(&self, face: &Face) -> FaceEdgeIterator {
+    pub fn edges(&self, face: &Face) -> FaceEdgeIterator {
         FaceEdgeIterator::new(face.edge_index, &self.edge_list)
     }
 
-    fn vertices(&self, face: &Face) -> FaceVertexIterator {
+    pub fn vertices(&self, face: &Face) -> FaceVertexIterator {
         FaceVertexIterator::new(face.edge_index, &self.edge_list)
     }
 
