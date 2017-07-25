@@ -196,7 +196,21 @@ impl Mesh {
     }
 
     pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
-        let result = self.edge_from_vertex(vert);
+        let result = match vert {
+            INVALID_COMPONENT_INDEX => {
+                let vert = {
+                    if let Some(vert) = self.edge_list.get(prev)
+                        .and_then(|e| self.edge_list.get(e.twin_index))
+                        .map(|e| e.vertex_index) {
+                            vert
+                        } else {
+                            return INVALID_COMPONENT_INDEX;
+                        }
+                };
+                self.edge_from_vertex(vert)
+            },
+            _ => self.edge_from_vertex(vert)
+        };
         self.connect_edges(prev, result);
         return result;
     }
