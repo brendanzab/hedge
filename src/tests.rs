@@ -192,7 +192,7 @@ fn can_add_triangles_to_mesh() {
         assert!(edge.prev_index != INVALID_COMPONENT_INDEX);
     }
 
-    let twin_a = mesh.edge(mesh.face(f1).edge_index).next_index;
+    let twin_a = mesh.face_fn(f1).edge().next().index;
     assert!(twin_a != INVALID_COMPONENT_INDEX);
 
     let f2 = mesh.add_adjacent_triangle(v3, twin_a);
@@ -208,6 +208,28 @@ fn can_add_triangles_to_mesh() {
     assert!(mesh.edge(twin_a).twin_index == twin_b);
     assert!(mesh.edge(twin_b).twin_index == twin_a);
 
-    assert!(mesh.edge(twin_a).vertex_index == mesh.edge( mesh.edge(twin_b).next_index ).vertex_index);
-    assert!(mesh.edge(twin_b).vertex_index == mesh.edge( mesh.edge(twin_a).next_index ).vertex_index);
+    assert!(mesh.edge(twin_a).vertex_index == mesh.edge_fn(twin_b).next().vertex().index);
+    assert!(mesh.edge(twin_b).vertex_index == mesh.edge_fn(twin_a).next().vertex().index);
+}
+
+#[test]
+fn can_walk_and_get_mutable_ref() {
+    let mut mesh = TestMesh::new();
+
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+
+    let f1 = mesh.add_triangle(v1, v2, v3);
+
+    {
+        let vertex = {
+            let index = mesh.face_fn(f1).edge().vertex().index;
+            mesh.vertex_mut(index).unwrap()
+        };
+        assert!(vertex.edge_index == 1);
+        vertex.edge_index = INVALID_COMPONENT_INDEX;
+    }
+
+    assert!(mesh.face_fn(f1).edge().vertex().edge().index == INVALID_COMPONENT_INDEX);
 }

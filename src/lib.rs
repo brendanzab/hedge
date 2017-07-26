@@ -278,13 +278,17 @@ impl Mesh {
     /// _In debug builds we assert that the vertex index is not the default index._
     pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
         debug_assert!(vert != INVALID_COMPONENT_INDEX);
-        self.add_edge(Edge {
+        let result = self.add_edge(Edge {
             twin_index: INVALID_COMPONENT_INDEX,
             next_index: INVALID_COMPONENT_INDEX,
             prev_index: INVALID_COMPONENT_INDEX,
             face_index: INVALID_COMPONENT_INDEX,
             vertex_index: vert
-        })
+        });
+        if let Some(vertex) = self.vertex_mut(vert) {
+            vertex.edge_index = result;
+        }
+        return result;
     }
 
     /// Create a new edge as a twin of the specified edge
@@ -295,7 +299,7 @@ impl Mesh {
     pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
         debug_assert!(twin != INVALID_COMPONENT_INDEX);
         debug_assert!(self.edge(twin).next_index != INVALID_COMPONENT_INDEX);
-        let vert = self.edge( self.edge(twin).next_index ).vertex_index;
+        let vert = self.edge_fn(twin).next().vertex().index;
         let result = self.edge_from_vertex(vert);
         self.set_twin_edges(result, twin);
         return result;
@@ -310,7 +314,7 @@ impl Mesh {
         let result = match vert {
             INVALID_COMPONENT_INDEX => {
                 debug_assert!(self.edge(prev).twin_index != INVALID_COMPONENT_INDEX);
-                let vert = self.edge( self.edge(prev).twin_index ).vertex_index;
+                let vert = self.edge_fn(prev).twin().vertex().index;
                 self.edge_from_vertex(vert)
             },
             _ => self.edge_from_vertex(vert)
