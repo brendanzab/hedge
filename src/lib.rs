@@ -115,6 +115,22 @@ pub struct FaceFn<'mesh> {
     pub index: FaceIndex
 }
 
+impl<'mesh> FaceFn<'mesh> {
+
+    pub fn new(index: FaceIndex, mesh: &'mesh Mesh) -> FaceFn {
+        FaceFn {
+            mesh: mesh,
+            face: mesh.face(index),
+            index: index
+        }
+    }
+
+    /// Convert this `FaceFn` to an `EdgeFn`.
+    pub fn edge(self) -> EdgeFn<'mesh> {
+        EdgeFn::new(self.face.edge_index, self.mesh)
+    }
+}
+
 /// Function set for operations related to the Vertex struct
 #[derive(Debug)]
 pub struct VertexFn<'mesh> {
@@ -123,12 +139,63 @@ pub struct VertexFn<'mesh> {
     pub index: VertexIndex
 }
 
+impl<'mesh> VertexFn<'mesh> {
+
+    pub fn new(index: VertexIndex, mesh: &'mesh Mesh) -> VertexFn {
+        VertexFn {
+            mesh: mesh,
+            vertex: mesh.vertex(index),
+            index: index
+        }
+    }
+
+    /// Convert this `VertexFn` to an `EdgeFn`
+    pub fn edge(self) -> EdgeFn<'mesh> {
+        EdgeFn::new(self.vertex.edge_index, self.mesh)
+    }
+}
+
 /// Function set for operations related to the Edge struct
 #[derive(Debug)]
 pub struct EdgeFn<'mesh> {
     mesh: &'mesh Mesh,
     edge: &'mesh Edge,
     pub index: EdgeIndex
+}
+
+impl<'mesh> EdgeFn<'mesh> {
+    pub fn new(index: EdgeIndex, mesh: &'mesh Mesh) -> EdgeFn {
+        EdgeFn {
+            mesh: mesh,
+            edge: mesh.edge(index),
+            index: index
+        }
+    }
+
+    /// Convert this `EdgeFn` to an `EdgeFn` of it's next edge
+    pub fn next(self) -> EdgeFn<'mesh> {
+        EdgeFn::new(self.edge.next_index, self.mesh)
+    }
+
+    /// Convert this `EdgeFn` to an `EdgeFn` of it's prev edge
+    pub fn prev(self) -> EdgeFn<'mesh> {
+        EdgeFn::new(self.edge.prev_index, self.mesh)
+    }
+
+    /// Convert this `EdgeFn` to an `EdgeFn` of it's twin edge
+    pub fn twin(self) -> EdgeFn<'mesh> {
+        EdgeFn::new(self.edge.twin_index, self.mesh)
+    }
+
+    /// Convert this `EdgeFn` to an `FaceFn`
+    pub fn face(self) -> FaceFn<'mesh> {
+        FaceFn::new(self.edge.face_index, self.mesh)
+    }
+
+    /// Convert this `EdgeFn` to an `VertexFn`
+    pub fn vertex(self) -> VertexFn<'mesh> {
+        VertexFn::new(self.edge.vertex_index, self.mesh)
+    }
 }
 
 /// Implements the fundamental storage operations and represents the principle
@@ -331,7 +398,7 @@ impl Mesh {
         return result;
     }
 
-    /// Returns a `FaceIterator` for this mesh.
+    /// Returns a `Faces` iterator for this mesh.
     ///
     /// ```
     /// let mesh = hedge::Mesh::new();
@@ -339,11 +406,11 @@ impl Mesh {
     ///    let face = mesh.face(index);
     /// }
     /// ```
-    pub fn faces(&self) -> FaceIterator {
-        FaceIterator::new(self.face_list.len())
+    pub fn faces(&self) -> Faces {
+        Faces::new(self.face_list.len())
     }
 
-    /// Returns an `EdgeLoopIterator` for the edges around the specified face.
+    /// Returns an `EdgeLoop` iterator for the edges around the specified face.
     ///
     /// ```
     /// let mesh = hedge::Mesh::new();
@@ -354,11 +421,11 @@ impl Mesh {
     ///    }
     /// }
     /// ```
-    pub fn edges(&self, face: &Face) -> EdgeLoopIterator {
-        EdgeLoopIterator::new(face.edge_index, &self.edge_list)
+    pub fn edges(&self, face: &Face) -> EdgeLoop {
+        EdgeLoop::new(face.edge_index, &self.edge_list)
     }
 
-    /// Returns an `EdgeLoopVertexIterator` for the vertices around the specified face.
+    /// Returns an `EdgeLoopVertices` iterator for the vertices around the specified face.
     ///
     /// ```
     /// let mesh = hedge::Mesh::new();
@@ -369,8 +436,8 @@ impl Mesh {
     ///    }
     /// }
     /// ```
-    pub fn vertices(&self, face: &Face) -> EdgeLoopVertexIterator {
-        EdgeLoopVertexIterator::new(face.edge_index, &self.edge_list)
+    pub fn vertices(&self, face: &Face) -> EdgeLoopVertices {
+        EdgeLoopVertices::new(face.edge_index, &self.edge_list)
     }
 
     pub fn face(&self, index: FaceIndex) -> &Face {
@@ -378,6 +445,33 @@ impl Mesh {
             result
         } else {
             &self.face_list[0]
+        }
+    }
+
+    /// Returns a `FaceFn` for the given index.
+    ///
+    /// ```
+    /// use hedge::{Mesh, Vertex};
+    /// let mut mesh = Mesh::new();
+    ///
+    /// let v1 = mesh.add_vertex(Vertex::default());
+    /// let v2 = mesh.add_vertex(Vertex::default());
+    /// let v3 = mesh.add_vertex(Vertex::default());
+    ///
+    /// let f1 = mesh.add_triangle(v1, v2, v3);
+    ///
+    /// assert!(mesh.face_fn(f1).edge().next().vertex().index == v2);
+    /// ```
+    pub fn face_fn(&self, index: FaceIndex) -> FaceFn {
+        FaceFn::new(index, &self)
+    }
+
+    /// Obtains a mutable reference to the `Face` for the provided index.
+    pub fn face_mut(&mut self, index: FaceIndex) -> Option<&mut Face> {
+        if index == INVALID_COMPONENT_INDEX {
+            None
+        } else {
+            self.face_list.get_mut(index)
         }
     }
 
@@ -389,22 +483,12 @@ impl Mesh {
         }
     }
 
-    pub fn vertex(&self, index: VertexIndex) -> &Vertex {
-        if let Some(result) = self.vertex_list.get(index) {
-            result
-        } else {
-            &self.vertex_list[0]
-        }
+    /// Returns an `EdgeFn` for the given index.
+    pub fn edge_fn(&self, index: EdgeIndex) -> EdgeFn {
+        EdgeFn::new(index, &self)
     }
 
-    pub fn face_mut(&mut self, index: FaceIndex) -> Option<&mut Face> {
-        if index == INVALID_COMPONENT_INDEX {
-            None
-        } else {
-            self.face_list.get_mut(index)
-        }
-    }
-
+    /// Obtains a mutable reference to the `Edge` for the provided index.
     pub fn edge_mut(&mut self, index: EdgeIndex) -> Option<&mut Edge> {
         if index == INVALID_COMPONENT_INDEX {
             None
@@ -413,6 +497,20 @@ impl Mesh {
         }
     }
 
+    pub fn vertex(&self, index: VertexIndex) -> &Vertex {
+        if let Some(result) = self.vertex_list.get(index) {
+            result
+        } else {
+            &self.vertex_list[0]
+        }
+    }
+
+    /// Returns a `VertexFn` for the given index.
+    pub fn vertex_fn(&self, index: VertexIndex) -> VertexFn {
+        VertexFn::new(index, &self)
+    }
+
+    /// Obtains a mutable reference to the `Vertex` for the provided index.
     pub fn vertex_mut(&mut self, index: VertexIndex) -> Option<&mut Vertex> {
         if index == INVALID_COMPONENT_INDEX {
             None
@@ -424,15 +522,15 @@ impl Mesh {
 
 /// An iterator that walks an edge loop around a face returning each `VertexIndex` in the loop.
 // yeah yeah yeah, I know this is copypasta...
-pub struct EdgeLoopVertexIterator<'mesh> {
+pub struct EdgeLoopVertices<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
-impl<'mesh> EdgeLoopVertexIterator<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopVertexIterator {
-        EdgeLoopVertexIterator {
+impl<'mesh> EdgeLoopVertices<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopVertices {
+        EdgeLoopVertices {
             edge_list: edge_list,
             initial_index: index,
             current_index: INVALID_COMPONENT_INDEX
@@ -440,7 +538,7 @@ impl<'mesh> EdgeLoopVertexIterator<'mesh> {
     }
 }
 
-impl<'mesh> Iterator for EdgeLoopVertexIterator<'mesh> {
+impl<'mesh> Iterator for EdgeLoopVertices<'mesh> {
     type Item = VertexIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -463,15 +561,15 @@ impl<'mesh> Iterator for EdgeLoopVertexIterator<'mesh> {
 }
 
 /// An iterator that walks an edge loop around a face returning each `EdgeIndex` in the loop.
-pub struct EdgeLoopIterator<'mesh> {
+pub struct EdgeLoop<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
-impl<'mesh> EdgeLoopIterator<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopIterator {
-        EdgeLoopIterator {
+impl<'mesh> EdgeLoop<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoop {
+        EdgeLoop {
             edge_list: edge_list,
             initial_index: index,
             current_index: INVALID_COMPONENT_INDEX
@@ -479,7 +577,7 @@ impl<'mesh> EdgeLoopIterator<'mesh> {
     }
 }
 
-impl<'mesh> Iterator for EdgeLoopIterator<'mesh> {
+impl<'mesh> Iterator for EdgeLoop<'mesh> {
     type Item = EdgeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -503,14 +601,14 @@ impl<'mesh> Iterator for EdgeLoopIterator<'mesh> {
 ///
 /// Currently this does not iterate using connectivity information but will
 /// perhaps do this in the future.
-pub struct FaceIterator {
+pub struct Faces {
     face_count: usize,
     previous_index: FaceIndex
 }
 
-impl FaceIterator {
-    pub fn new(face_count: usize) -> FaceIterator {
-        FaceIterator {
+impl Faces {
+    pub fn new(face_count: usize) -> Faces {
+        Faces {
             face_count: face_count,
             previous_index: 0
         }
@@ -518,7 +616,7 @@ impl FaceIterator {
 }
 
 // TODO: iterate over faces based on connectivity?
-impl Iterator for FaceIterator {
+impl Iterator for Faces {
     type Item = FaceIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
