@@ -1,6 +1,6 @@
 
 //!
-//! This is an implementation of an index based half-edge mesh facility.
+//! An index based half-edge mesh implementation.
 //!
 
 use std::fmt;
@@ -109,9 +109,26 @@ impl Validation for Face {
 
 /// Function set for operations related to the Face struct
 #[derive(Debug)]
-pub struct FaceFn<'a> {
-    mesh: &'a Mesh,
+pub struct FaceFn<'mesh> {
+    mesh: &'mesh Mesh,
+    face: &'mesh Face,
     pub index: FaceIndex
+}
+
+/// Function set for operations related to the Vertex struct
+#[derive(Debug)]
+pub struct VertexFn<'mesh> {
+    mesh: &'mesh Mesh,
+    vertex: &'mesh Vertex,
+    pub index: VertexIndex
+}
+
+/// Function set for operations related to the Edge struct
+#[derive(Debug)]
+pub struct EdgeFn<'mesh> {
+    mesh: &'mesh Mesh,
+    edge: &'mesh Edge,
+    pub index: EdgeIndex
 }
 
 /// Implements the fundamental storage operations and represents the principle
@@ -134,9 +151,6 @@ impl Mesh {
     ///
     /// The idea behind having a single invalid component at the front of each
     /// Vec comes from the blog http://ourmachinery.com/post/defaulting-to-zero/
-    // Not sure though it's something we need to do in Rust given `Option<T>`
-    // however, it's nice to have a simple constant value to represent the
-    // invalid index.
     pub fn new() -> Mesh {
         Mesh {
             edge_list: vec! [
@@ -151,8 +165,24 @@ impl Mesh {
         }
     }
 
+    /// Mark the two edges as adjacent twins.
+    ///
+    /// In order for this to be valid each edge should be connected in such a way
+    /// that the vertex of each is the same as the vertex of the next edge of each.
+    ///
+    /// So: `A->Next->Vertex == B->Vertex` && `B->Next->Vertex == A->Vertex`
+    ///
+    /// _In debug builds we assert the provided indices are valid._
     pub fn set_twin_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
-        // TODO: we should verify vertex correlation
+        debug_assert!(e1 != INVALID_COMPONENT_INDEX && e2 != INVALID_COMPONENT_INDEX);
+        // TODO: Disabling this for the moment because it would prevent the use
+        //       of the `edge_from_twin` method.
+        // debug_assert! {
+        //     self.edge(e1).vertex_index == self.edge( self.edge(e2).next_index ).vertex_index
+        // };
+        // debug_assert! {
+        //     self.edge(e2).vertex_index == self.edge( self.edge(e1).next_index ).vertex_index
+        // };
         if let Some(ref mut edge1) = self.edge_mut(e1) {
             edge1.twin_index = e2;
         }
@@ -161,16 +191,24 @@ impl Mesh {
         }
     }
 
-    pub fn connect_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
-        if let Some(ref mut edge1) = self.edge_mut(e1) {
-            edge1.next_index = e2;
+    /// Connects the two edges as part of an edge loop.
+    ///
+    /// _In debug builds we assert that neither index is not the default index._
+    pub fn connect_edges(&mut self, prev: EdgeIndex, next: EdgeIndex) {
+        debug_assert!(prev != INVALID_COMPONENT_INDEX && next != INVALID_COMPONENT_INDEX);
+        if let Some(ref mut prev_edge) = self.edge_mut(prev) {
+            prev_edge.next_index = next;
         }
-        if let Some(ref mut edge2) = self.edge_mut(e2) {
-            edge2.prev_index = e1;
+        if let Some(ref mut next_edge) = self.edge_mut(next) {
+            next_edge.prev_index = prev;
         }
     }
 
+    /// Create a new edge from the specified vertex.
+    ///
+    /// _In debug builds we assert that the vertex index is not the default index._
     pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
+        debug_assert!(vert != INVALID_COMPONENT_INDEX);
         self.add_edge(Edge {
             twin_index: INVALID_COMPONENT_INDEX,
             next_index: INVALID_COMPONENT_INDEX,
@@ -180,33 +218,29 @@ impl Mesh {
         })
     }
 
+    /// Create a new edge as a twin of the specified edge
+    ///
+    /// _In debug builds we assert that the twin index is not the default index
+    /// and that the twins next index is not the default index (since we need
+    /// that edge to find the correct vertex index)._
     pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
-        let vert = {
-            if let Some(vert) = self.edge_list.get(twin)
-                .and_then(|twin_edge| self.edge_list.get(twin_edge.next_index))
-                .map(|next_twin_edge| next_twin_edge.vertex_index) {
-                    vert
-                } else {
-                    return INVALID_COMPONENT_INDEX;
-                }
-        };
+        debug_assert!(twin != INVALID_COMPONENT_INDEX);
+        debug_assert!(self.edge(twin).next_index != INVALID_COMPONENT_INDEX);
+        let vert = self.edge( self.edge(twin).next_index ).vertex_index;
         let result = self.edge_from_vertex(vert);
         self.set_twin_edges(result, twin);
         return result;
     }
 
+    /// Create a new edge connected to the previous edge specified.
+    ///
+    /// _In debug builds we assert that the indices specified are valid._
     pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
+        debug_assert!(prev != INVALID_COMPONENT_INDEX && vert != INVALID_COMPONENT_INDEX);
         let result = match vert {
             INVALID_COMPONENT_INDEX => {
-                let vert = {
-                    if let Some(vert) = self.edge_list.get(prev)
-                        .and_then(|e| self.edge_list.get(e.twin_index))
-                        .map(|e| e.vertex_index) {
-                            vert
-                        } else {
-                            return INVALID_COMPONENT_INDEX;
-                        }
-                };
+                debug_assert!(self.edge(prev).twin_index != INVALID_COMPONENT_INDEX);
+                let vert = self.edge( self.edge(prev).twin_index ).vertex_index;
                 self.edge_from_vertex(vert)
             },
             _ => self.edge_from_vertex(vert)
@@ -215,20 +249,38 @@ impl Mesh {
         return result;
     }
 
+    /// Create a new edge, closing an edge loop, using the `prev` and `next` indices provided.
+    ///
+    /// _In debug builds we assert that all specified indices are valid._
     pub fn close_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex, next: EdgeIndex) -> EdgeIndex {
+        debug_assert! {
+            vert != INVALID_COMPONENT_INDEX &&
+                prev != INVALID_COMPONENT_INDEX &&
+                next != INVALID_COMPONENT_INDEX
+        };
         let result = self.edge_from_vertex(vert);
         self.connect_edges(prev, result);
         self.connect_edges(result, next);
         return result;
     }
 
+    /// Adds the provided `Edge` to the mesh and returns it's `EdgeIndex`
     pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
         let result: EdgeIndex = self.edge_list.len();
         self.edge_list.push(edge);
         return result;
     }
 
+    /// Creates a new face and associated edges with the given vertex indices.
+    /// Returns the index of the newly added face.
+    ///
+    /// _In debug builds we assert that all provided indices are valid._
     pub fn add_triangle(&mut self, a: VertexIndex, b: VertexIndex, c: VertexIndex) -> FaceIndex {
+        debug_assert! {
+            a != INVALID_COMPONENT_INDEX &&
+                b != INVALID_COMPONENT_INDEX &&
+                c != INVALID_COMPONENT_INDEX
+        };
         let result: FaceIndex = self.face_list.len();
 
         let e1 = self.edge_from_vertex(a);
@@ -244,22 +296,66 @@ impl Mesh {
         return result;
     }
 
+    /// Creates a new face and associated edges with the given a vertex index and a twin edge index.
+    /// Returns the index of the newly added face.
+    ///
+    /// _In debug builds we assert that the all provided indices are valid._
     pub fn add_adjacent_triangle(&mut self, a: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
+        debug_assert! {
+            a != INVALID_COMPONENT_INDEX && twin_edge != INVALID_COMPONENT_INDEX
+        };
         let result: FaceIndex = self.face_list.len();
+
+        let e1 = self.edge_from_twin(twin_edge);
+        let e2 = self.extend_edge_loop(INVALID_COMPONENT_INDEX, e1);
+        let e3 = self.close_edge_loop(a, e2, e1);
+
+        self.edge_mut(e1).map(|e| e.face_index = result);
+        self.edge_mut(e2).map(|e| e.face_index = result);
+        self.edge_mut(e3).map(|e| e.face_index = result);
+
+        self.face_list.push(Face::new(e1));
 
         return result;
     }
 
+    /// Returns a `FaceIterator` for this mesh.
+    ///
+    /// ```
+    /// for index in mesh.faces() {
+    ///    let face = mesh.face(index);
+    /// }
+    /// ```
     pub fn faces(&self) -> FaceIterator {
         FaceIterator::new(self.face_list.len())
     }
 
+    /// Returns an `EdgeLoopIterator` for the edges around the specified face.
+    ///
+    /// ```
+    /// for findex in mesh.faces() {
+    ///    let face = mesh.face(findex);
+    ///    for eindex in mesh.edges(face) {
+    ///        let edge = mesh.edge(eindex);
+    ///    }
+    /// }
+    /// ```
     pub fn edges(&self, face: &Face) -> EdgeLoopIterator {
         EdgeLoopIterator::new(face.edge_index, &self.edge_list)
     }
 
-    pub fn vertices(&self, face: &Face) -> FaceVertexIterator {
-        FaceVertexIterator::new(face.edge_index, &self.edge_list)
+    /// Returns an `EdgeLoopVertexIterator` for the vertices around the specified face.
+    ///
+    /// ```
+    /// for findex in mesh.faces() {
+    ///    let face = mesh.face(findex);
+    ///    for vindex in mesh.vertices(face) {
+    ///        let vertex = mesh.vertex(vindex);
+    ///    }
+    /// }
+    /// ```
+    pub fn vertices(&self, face: &Face) -> EdgeLoopVertexIterator {
+        EdgeLoopVertexIterator::new(face.edge_index, &self.edge_list)
     }
 
     pub fn face(&self, index: FaceIndex) -> &Face {
@@ -311,16 +407,17 @@ impl Mesh {
     }
 }
 
+/// An iterator that walks an edge loop around a face returning each `VertexIndex` in the loop.
 // yeah yeah yeah, I know this is copypasta...
-pub struct FaceVertexIterator<'mesh> {
+pub struct EdgeLoopVertexIterator<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
-impl<'mesh> FaceVertexIterator<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> FaceVertexIterator {
-        FaceVertexIterator {
+impl<'mesh> EdgeLoopVertexIterator<'mesh> {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopVertexIterator {
+        EdgeLoopVertexIterator {
             edge_list: edge_list,
             initial_index: index,
             current_index: INVALID_COMPONENT_INDEX
@@ -328,7 +425,7 @@ impl<'mesh> FaceVertexIterator<'mesh> {
     }
 }
 
-impl<'mesh> Iterator for FaceVertexIterator<'mesh> {
+impl<'mesh> Iterator for EdgeLoopVertexIterator<'mesh> {
     type Item = VertexIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -350,6 +447,7 @@ impl<'mesh> Iterator for FaceVertexIterator<'mesh> {
     }
 }
 
+/// An iterator that walks an edge loop around a face returning each `EdgeIndex` in the loop.
 pub struct EdgeLoopIterator<'mesh> {
     edge_list: &'mesh Vec<Edge>,
     initial_index: EdgeIndex,
@@ -386,6 +484,10 @@ impl<'mesh> Iterator for EdgeLoopIterator<'mesh> {
     }
 }
 
+/// An iterator that returns the `FaceIndex` of every Face in the mesh.
+///
+/// Currently this does not iterate using connectivity information but will
+/// perhaps do this in the future.
 pub struct FaceIterator {
     face_count: usize,
     previous_index: FaceIndex
@@ -400,6 +502,7 @@ impl FaceIterator {
     }
 }
 
+// TODO: iterate over faces based on connectivity?
 impl Iterator for FaceIterator {
     type Item = FaceIndex;
 
