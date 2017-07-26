@@ -159,11 +159,13 @@ fn can_iterate_over_vertices_of_face() {
     let mut vertices_iterated_over = 0;
 
     for face_index in mesh.faces() {
+        assert!(face_index != INVALID_COMPONENT_INDEX);
         let face = mesh.face(face_index);
         assert!(face.is_valid());
         faces_iterated_over += 1;
 
         for vertex_index in mesh.vertices(face) {
+            assert!(vertex_index != INVALID_COMPONENT_INDEX);
             let vertex = mesh.vertex(vertex_index);
             assert!(vertex.is_valid());
             vertices_iterated_over += 1;
@@ -172,4 +174,40 @@ fn can_iterate_over_vertices_of_face() {
 
     assert!(faces_iterated_over == 1);
     assert!(vertices_iterated_over == 3);
+}
+
+#[test]
+fn can_add_triangles_to_mesh() {
+    let mut mesh = TestMesh::new();
+
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+    let v4 = mesh.add_vertex(Vertex::default());
+
+    let f1 = mesh.add_triangle(v1, v2, v4);
+    for eindex in mesh.edges(mesh.face(f1)) {
+        let ref edge = mesh.edge(eindex);
+        assert!(edge.next_index != INVALID_COMPONENT_INDEX);
+        assert!(edge.prev_index != INVALID_COMPONENT_INDEX);
+    }
+
+    let twin_a = mesh.edge(mesh.face(f1).edge_index).next_index;
+    assert!(twin_a != INVALID_COMPONENT_INDEX);
+
+    let f2 = mesh.add_adjacent_triangle(v3, twin_a);
+    for eindex in mesh.edges(mesh.face(f1)) {
+        let ref edge = mesh.edge(eindex);
+        assert!(edge.next_index != INVALID_COMPONENT_INDEX);
+        assert!(edge.prev_index != INVALID_COMPONENT_INDEX);
+    }
+
+    let twin_b = mesh.face(f2).edge_index;
+    assert!(twin_b != INVALID_COMPONENT_INDEX);
+
+    assert!(mesh.edge(twin_a).twin_index == twin_b);
+    assert!(mesh.edge(twin_b).twin_index == twin_a);
+
+    assert!(mesh.edge(twin_a).vertex_index == mesh.edge( mesh.edge(twin_b).next_index ).vertex_index);
+    assert!(mesh.edge(twin_b).vertex_index == mesh.edge( mesh.edge(twin_a).next_index ).vertex_index);
 }

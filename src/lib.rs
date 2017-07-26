@@ -174,7 +174,8 @@ impl Mesh {
     ///
     /// _In debug builds we assert the provided indices are valid._
     pub fn set_twin_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
-        debug_assert!(e1 != INVALID_COMPONENT_INDEX && e2 != INVALID_COMPONENT_INDEX);
+        debug_assert!(e1 != INVALID_COMPONENT_INDEX);
+        debug_assert!(e2 != INVALID_COMPONENT_INDEX);
         // TODO: Disabling this for the moment because it would prevent the use
         //       of the `edge_from_twin` method.
         // debug_assert! {
@@ -195,7 +196,8 @@ impl Mesh {
     ///
     /// _In debug builds we assert that neither index is not the default index._
     pub fn connect_edges(&mut self, prev: EdgeIndex, next: EdgeIndex) {
-        debug_assert!(prev != INVALID_COMPONENT_INDEX && next != INVALID_COMPONENT_INDEX);
+        debug_assert!(prev != INVALID_COMPONENT_INDEX);
+        debug_assert!(next != INVALID_COMPONENT_INDEX);
         if let Some(ref mut prev_edge) = self.edge_mut(prev) {
             prev_edge.next_index = next;
         }
@@ -236,7 +238,8 @@ impl Mesh {
     ///
     /// _In debug builds we assert that the indices specified are valid._
     pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
-        debug_assert!(prev != INVALID_COMPONENT_INDEX && vert != INVALID_COMPONENT_INDEX);
+        debug_assert!(vert != INVALID_COMPONENT_INDEX);
+        debug_assert!(prev != INVALID_COMPONENT_INDEX);
         let result = match vert {
             INVALID_COMPONENT_INDEX => {
                 debug_assert!(self.edge(prev).twin_index != INVALID_COMPONENT_INDEX);
@@ -268,6 +271,15 @@ impl Mesh {
     pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
         let result: EdgeIndex = self.edge_list.len();
         self.edge_list.push(edge);
+        debug_assert!(result != INVALID_COMPONENT_INDEX);
+        return result;
+    }
+
+    /// Adds the provided `Vertex` to the mesh and returns it's `VertexIndex`
+    pub fn add_vertex(&mut self, vert: Vertex) -> VertexIndex {
+        let result: VertexIndex = self.vertex_list.len();
+        self.vertex_list.push(vert);
+        debug_assert!(result != INVALID_COMPONENT_INDEX);
         return result;
     }
 
@@ -300,15 +312,15 @@ impl Mesh {
     /// Returns the index of the newly added face.
     ///
     /// _In debug builds we assert that the all provided indices are valid._
-    pub fn add_adjacent_triangle(&mut self, a: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
-        debug_assert! {
-            a != INVALID_COMPONENT_INDEX && twin_edge != INVALID_COMPONENT_INDEX
-        };
+    pub fn add_adjacent_triangle(&mut self, c: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
+        debug_assert!(c != INVALID_COMPONENT_INDEX);
+        debug_assert!(twin_edge != INVALID_COMPONENT_INDEX);
         let result: FaceIndex = self.face_list.len();
 
         let e1 = self.edge_from_twin(twin_edge);
-        let e2 = self.extend_edge_loop(INVALID_COMPONENT_INDEX, e1);
-        let e3 = self.close_edge_loop(a, e2, e1);
+        let b = self.edge(twin_edge).vertex_index;
+        let e2 = self.extend_edge_loop(b, e1);
+        let e3 = self.close_edge_loop(c, e2, e1);
 
         self.edge_mut(e1).map(|e| e.face_index = result);
         self.edge_mut(e2).map(|e| e.face_index = result);
@@ -322,6 +334,7 @@ impl Mesh {
     /// Returns a `FaceIterator` for this mesh.
     ///
     /// ```
+    /// let mesh = hedge::Mesh::new();
     /// for index in mesh.faces() {
     ///    let face = mesh.face(index);
     /// }
@@ -333,6 +346,7 @@ impl Mesh {
     /// Returns an `EdgeLoopIterator` for the edges around the specified face.
     ///
     /// ```
+    /// let mesh = hedge::Mesh::new();
     /// for findex in mesh.faces() {
     ///    let face = mesh.face(findex);
     ///    for eindex in mesh.edges(face) {
@@ -347,6 +361,7 @@ impl Mesh {
     /// Returns an `EdgeLoopVertexIterator` for the vertices around the specified face.
     ///
     /// ```
+    /// let mesh = hedge::Mesh::new();
     /// for findex in mesh.faces() {
     ///    let face = mesh.face(findex);
     ///    for vindex in mesh.vertices(face) {
