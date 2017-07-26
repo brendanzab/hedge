@@ -273,6 +273,10 @@ impl Mesh {
         }
     }
 
+    fn set_edge_loop_face(&mut self, face_index: FaceIndex, edge_index: EdgeIndex) {
+        unimplemented!()
+    }
+
     /// Create a new edge from the specified vertex.
     ///
     /// _In debug builds we assert that the vertex index is not the default index._
@@ -341,16 +345,26 @@ impl Mesh {
     /// Adds the provided `Edge` to the mesh and returns it's `EdgeIndex`
     pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
         let result: EdgeIndex = self.edge_list.len();
-        self.edge_list.push(edge);
         debug_assert!(result != INVALID_COMPONENT_INDEX);
+        self.edge_list.push(edge);
+        debug_assert!(result == self.edge_list.len() - 1);
         return result;
     }
 
     /// Adds the provided `Vertex` to the mesh and returns it's `VertexIndex`
     pub fn add_vertex(&mut self, vert: Vertex) -> VertexIndex {
         let result: VertexIndex = self.vertex_list.len();
-        self.vertex_list.push(vert);
         debug_assert!(result != INVALID_COMPONENT_INDEX);
+        self.vertex_list.push(vert);
+        debug_assert!(result == self.vertex_list.len() - 1);
+        return result;
+    }
+
+    pub fn add_face(&mut self, face: Face) -> FaceIndex {
+        let result: FaceIndex = self.face_list.len();
+        debug_assert!(result != INVALID_COMPONENT_INDEX);
+        self.face_list.push(face);
+        debug_assert!(result == self.face_list.len() - 1);
         return result;
     }
 
@@ -364,17 +378,16 @@ impl Mesh {
                 b != INVALID_COMPONENT_INDEX &&
                 c != INVALID_COMPONENT_INDEX
         };
-        let result: FaceIndex = self.face_list.len();
 
         let e1 = self.edge_from_vertex(a);
         let e2 = self.extend_edge_loop(b, e1);
         let e3 = self.close_edge_loop(c, e2, e1);
 
+        let result = self.add_face(Face::new(e1));
+
         self.edge_mut(e1).map(|e| e.face_index = result);
         self.edge_mut(e2).map(|e| e.face_index = result);
         self.edge_mut(e3).map(|e| e.face_index = result);
-
-        self.face_list.push(Face::new(e1));
 
         return result;
     }
@@ -386,18 +399,17 @@ impl Mesh {
     pub fn add_adjacent_triangle(&mut self, c: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
         debug_assert!(c != INVALID_COMPONENT_INDEX);
         debug_assert!(twin_edge != INVALID_COMPONENT_INDEX);
-        let result: FaceIndex = self.face_list.len();
 
         let e1 = self.edge_from_twin(twin_edge);
         let b = self.edge(twin_edge).vertex_index;
         let e2 = self.extend_edge_loop(b, e1);
         let e3 = self.close_edge_loop(c, e2, e1);
 
+        let result = self.add_face(Face::new(e1));
+
         self.edge_mut(e1).map(|e| e.face_index = result);
         self.edge_mut(e2).map(|e| e.face_index = result);
         self.edge_mut(e3).map(|e| e.face_index = result);
-
-        self.face_list.push(Face::new(e1));
 
         return result;
     }
