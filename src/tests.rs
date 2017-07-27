@@ -233,3 +233,75 @@ fn can_walk_and_get_mutable_ref() {
 
     assert!(mesh.face_fn(f1).edge().vertex().edge().index == INVALID_COMPONENT_INDEX);
 }
+
+#[test]
+fn can_build_a_simple_mesh() {
+    let mut mesh = TestMesh::new();
+
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+    let v4 = mesh.add_vertex(Vertex::default());
+
+    let f1 = mesh.add_triangle(v1, v2, v3);
+    let f2 = {
+        let edge_index = mesh.face_fn(f1).edge().index;
+        mesh.add_adjacent_triangle(v4, edge_index)
+    };
+    let f3 = {
+        let edge_index = mesh.face_fn(f1).edge().next().index;
+        mesh.add_adjacent_triangle(v4, edge_index)
+    };
+    let f4 = {
+        let edge_index = mesh.face_fn(f1).edge().prev().index;
+        mesh.add_adjacent_triangle(v4, edge_index)
+    };
+
+    // stitch f2-f3
+    {
+        let edge_a = mesh.face_fn(f2).edge().next().index;
+        let edge_b = mesh.face_fn(f3).edge().prev().index;
+        mesh.set_twin_edges(edge_a, edge_b);
+    }
+
+    // stitch f3-f4
+    {
+        let edge_a = mesh.face_fn(f3).edge().next().index;
+        let edge_b = mesh.face_fn(f4).edge().prev().index;
+        mesh.set_twin_edges(edge_a, edge_b);
+    }
+
+    // stitch f4-f2
+    {
+        let edge_a = mesh.face_fn(f4).edge().next().index;
+        let edge_b = mesh.face_fn(f2).edge().prev().index;
+        mesh.set_twin_edges(edge_a, edge_b);
+    }
+
+    assert!(mesh.face_fn(f1).edge().twin().face().index        == f2);
+    assert!(mesh.face_fn(f1).edge().next().twin().face().index == f3);
+    assert!(mesh.face_fn(f1).edge().prev().twin().face().index == f4);
+
+    assert!(mesh.face_fn(f2).edge().next().twin().face().index == f3);
+    assert!(mesh.face_fn(f2).edge().prev().twin().face().index == f4);
+
+    assert!(mesh.face_fn(f3).edge().next().twin().face().index == f4);
+    assert!(mesh.face_fn(f3).edge().prev().twin().face().index == f2);
+
+    assert!(mesh.face_fn(f4).edge().next().twin().face().index == f2);
+    assert!(mesh.face_fn(f4).edge().prev().twin().face().index == f3);
+
+    assert!(mesh.face_fn(f1).edge().prev().vertex().index == mesh.face_fn(f3).edge().vertex().index);
+    assert!(mesh.face_fn(f1).edge().vertex().index        == mesh.face_fn(f4).edge().vertex().index);
+    assert!(mesh.face_fn(f1).edge().next().vertex().index == mesh.face_fn(f2).edge().vertex().index);
+
+    assert!(mesh.face_fn(f2).edge().vertex().index == mesh.face_fn(f3).edge().next().vertex().index);
+    assert!(mesh.face_fn(f3).edge().vertex().index == mesh.face_fn(f4).edge().next().vertex().index);
+
+    let f2_prev_vert = mesh.face_fn(f2).edge().prev().vertex().index;
+    let f3_prev_vert = mesh.face_fn(f3).edge().prev().vertex().index;
+    let f4_prev_vert = mesh.face_fn(f4).edge().prev().vertex().index;
+    assert! {
+        (f2_prev_vert == v4) && (f3_prev_vert == v4) && (f4_prev_vert == v4)
+    };
+}
