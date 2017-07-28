@@ -409,6 +409,18 @@ impl Mesh {
         return result;
     }
 
+    pub fn remove_vertex(&mut self, index: VertexIndex) {
+        unimplemented!()
+    }
+
+    pub fn remove_edge(&mut self, index: EdgeIndex) {
+        unimplemented!()
+    }
+
+    pub fn remove_face(&mut self, index: FaceIndex) {
+        unimplemented!()
+    }
+
     /// Creates a new face and associated edges with the given vertex indices.
     /// Returns the index of the newly added face.
     ///
