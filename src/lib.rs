@@ -20,6 +20,9 @@ pub trait Validation {
 /// Our default value for uninitialized or unconnected components in the mesh.
 pub const INVALID_COMPONENT_INDEX: usize = 0;
 
+/// Type alias for indices into vertex attribute storage
+pub type VertexAttributeIndex = usize;
+
 #[derive(Default, Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub struct VertexIndex(usize);
 
@@ -29,11 +32,14 @@ impl Validation for VertexIndex {
     }
 }
 
-/// Type alias for indices into vertex attribute storage
-pub type VertexAttributeIndex = usize;
+#[derive(Default, Debug, PartialEq, PartialOrd, Clone, Copy)]
+pub struct EdgeIndex(usize);
 
-/// Type alias for indices into edge storage
-pub type EdgeIndex = usize;
+impl Validation for EdgeIndex {
+    fn is_valid(&self) -> bool {
+        self.0 != INVALID_COMPONENT_INDEX
+    }
+}
 
 /// Type alias for indices into face storage
 pub type FaceIndex = usize;
@@ -61,7 +67,7 @@ impl Validation for Vertex {
     /// A vertex is considered "valid" as long as it as an edge index
     /// other than `INVALID_COMPONENT_INDEX`
     fn is_valid(&self) -> bool {
-        self.edge_index != INVALID_COMPONENT_INDEX /*&&
+        self.edge_index.is_valid() /*&&
             self.attr_index != INVALID_COMPONENT_INDEX*/
     }
 }
@@ -87,13 +93,12 @@ pub struct Edge {
 impl Edge {
     /// Returns true when this edge has no twin.
     pub fn is_boundary(&self) -> bool {
-        self.twin_index == INVALID_COMPONENT_INDEX
+        !self.twin_index.is_valid()
     }
 
     /// Returns true when this edge has a previous and next edge.
     pub fn is_connected(&self) -> bool {
-        self.next_index != INVALID_COMPONENT_INDEX &&
-            self.prev_index != INVALID_COMPONENT_INDEX
+        self.next_index.is_valid() && self.prev_index.is_valid()
     }
 }
 
@@ -104,8 +109,8 @@ impl Validation for Edge {
     fn is_valid(&self) -> bool {
         self.vertex_index.is_valid() &&
             self.face_index != INVALID_COMPONENT_INDEX &&
-            self.prev_index != INVALID_COMPONENT_INDEX &&
-            self.next_index != INVALID_COMPONENT_INDEX
+            self.prev_index.is_valid() &&
+            self.next_index.is_valid()
     }
 }
 
@@ -129,7 +134,7 @@ impl Validation for Face {
     /// A face is considered "valid" as long as it has an edge index
     /// other than `INVALID_COMPONENT_INDEX`
     fn is_valid(&self) -> bool {
-        self.edge_index != INVALID_COMPONENT_INDEX
+        self.edge_index.is_valid()
     }
 }
 
@@ -285,8 +290,8 @@ impl Mesh {
     ///
     /// _In debug builds we assert the provided indices are valid._
     pub fn set_twin_edges(&mut self, e1: EdgeIndex, e2: EdgeIndex) {
-        debug_assert!(e1 != INVALID_COMPONENT_INDEX);
-        debug_assert!(e2 != INVALID_COMPONENT_INDEX);
+        debug_assert!(e1.is_valid());
+        debug_assert!(e2.is_valid());
         // TODO: Disabling this for the moment because it would prevent the use
         //       of the `edge_from_twin` method.
         // debug_assert! {
@@ -307,8 +312,8 @@ impl Mesh {
     ///
     /// _In debug builds we assert that neither index is the default index._
     pub fn connect_edges(&mut self, prev: EdgeIndex, next: EdgeIndex) {
-        debug_assert!(prev != INVALID_COMPONENT_INDEX);
-        debug_assert!(next != INVALID_COMPONENT_INDEX);
+        debug_assert!(prev.is_valid());
+        debug_assert!(next.is_valid());
         if let Some(ref mut prev_edge) = self.edge_mut(prev) {
             prev_edge.next_index = next;
         }
@@ -322,7 +327,7 @@ impl Mesh {
     /// _In debug builds we assert that each index provided is valid._
     pub fn assign_face_to_loop(&mut self, face_index: FaceIndex, edge_index: EdgeIndex) {
         debug_assert!(face_index != INVALID_COMPONENT_INDEX);
-        debug_assert!(edge_index != INVALID_COMPONENT_INDEX);
+        debug_assert!(edge_index.is_valid());
         if let Some(ref mut face) = self.face_mut(face_index) {
             face.edge_index = edge_index;
         }
@@ -340,9 +345,9 @@ impl Mesh {
     pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
         debug_assert!(vert.is_valid());
         let result = self.add_edge(Edge {
-            twin_index: INVALID_COMPONENT_INDEX,
-            next_index: INVALID_COMPONENT_INDEX,
-            prev_index: INVALID_COMPONENT_INDEX,
+            twin_index: EdgeIndex::default(),
+            next_index: EdgeIndex::default(),
+            prev_index: EdgeIndex::default(),
             face_index: INVALID_COMPONENT_INDEX,
             vertex_index: vert
         });
@@ -358,8 +363,8 @@ impl Mesh {
     /// and that the twins next index is not the default index (since we need
     /// that edge to find the correct vertex index)._
     pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
-        debug_assert!(twin != INVALID_COMPONENT_INDEX);
-        debug_assert!(self.edge(twin).next_index != INVALID_COMPONENT_INDEX);
+        debug_assert!(twin.is_valid());
+        debug_assert!(self.edge(twin).next_index.is_valid());
         let vert = self.edge_fn(twin).next().vertex().index;
         let result = self.edge_from_vertex(vert);
         self.set_twin_edges(result, twin);
@@ -371,10 +376,10 @@ impl Mesh {
     /// _In debug builds we assert that the indices specified are valid._
     pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
         debug_assert!(vert.is_valid());
-        debug_assert!(prev != INVALID_COMPONENT_INDEX);
+        debug_assert!(prev.is_valid());
         let result = match vert.0 {
             INVALID_COMPONENT_INDEX => {
-                debug_assert!(self.edge(prev).twin_index != INVALID_COMPONENT_INDEX);
+                debug_assert!(self.edge(prev).twin_index.is_valid());
                 let vert = self.edge_fn(prev).twin().vertex().index;
                 self.edge_from_vertex(vert)
             },
@@ -390,8 +395,8 @@ impl Mesh {
     pub fn close_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex, next: EdgeIndex) -> EdgeIndex {
         debug_assert! {
             vert.is_valid() &&
-                prev != INVALID_COMPONENT_INDEX &&
-                next != INVALID_COMPONENT_INDEX
+                prev.is_valid() &&
+                next.is_valid()
         };
         let result = self.edge_from_vertex(vert);
         self.connect_edges(prev, result);
@@ -404,10 +409,8 @@ impl Mesh {
     /// _In debug builds we assert that the result is a valid index and
     /// that the edge was added to the list._
     pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
-        let result: EdgeIndex = self.edge_list.len();
-        debug_assert!(result != INVALID_COMPONENT_INDEX);
+        let result = EdgeIndex(self.edge_list.len());
         self.edge_list.push(edge);
-        debug_assert!(result == self.edge_list.len() - 1);
         return result;
     }
 
@@ -442,18 +445,18 @@ impl Mesh {
     // TODO: Looking over this I am definitely missing a bunch of edge cases if
     //       I don't ensure that the related components are valid.
     pub fn remove_edge(&mut self, index: EdgeIndex) {
-        debug_assert!(index != INVALID_COMPONENT_INDEX);
-        let removed_edge = self.edge_list.swap_remove(index);
+        debug_assert!(index.is_valid());
+        let removed_edge = self.edge_list.swap_remove(index.0);
 
         // Update components affected by removal
         if let Some(ref mut next) = self.edge_mut(removed_edge.next_index) {
-            next.prev_index = INVALID_COMPONENT_INDEX;
+            next.prev_index = EdgeIndex::default();
         }
         if let Some(ref mut prev) = self.edge_mut(removed_edge.prev_index) {
-            prev.next_index = INVALID_COMPONENT_INDEX;
+            prev.next_index = EdgeIndex::default();
         }
         if let Some(ref mut twin) = self.edge_mut(removed_edge.twin_index) {
-            twin.twin_index = INVALID_COMPONENT_INDEX;
+            twin.twin_index = EdgeIndex::default();
         }
         if let Some(ref mut face) = self.face_mut(removed_edge.face_index) {
             if face.edge_index == index {
@@ -496,7 +499,7 @@ impl Mesh {
         if let Some(ref mut twin) = self.edge_mut(twin_index) {
             twin.twin_index = index;
         }
-        let swapped_index = self.edge_list.len();
+        let swapped_index = EdgeIndex(self.edge_list.len());
         let face_index = self.edge(index).face_index;
         if let Some(ref mut face) = self.face_mut(face_index) {
             if face.edge_index == swapped_index {
@@ -562,7 +565,7 @@ impl Mesh {
     /// _In debug builds we assert that the all provided indices are valid._
     pub fn add_adjacent_triangle(&mut self, c: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
         debug_assert!(c.is_valid());
-        debug_assert!(twin_edge != INVALID_COMPONENT_INDEX);
+        debug_assert!(twin_edge.is_valid());
 
         let e1 = self.edge_from_twin(twin_edge);
         let b = self.edge(twin_edge).vertex_index;
@@ -687,7 +690,7 @@ impl Mesh {
     }
 
     pub fn edge(&self, index: EdgeIndex) -> &Edge {
-        if let Some(result) = self.edge_list.get(index) {
+        if let Some(result) = self.edge_list.get(index.0) {
             result
         } else {
             &self.edge_list[0]
@@ -701,10 +704,10 @@ impl Mesh {
 
     /// Obtains a mutable reference to the `Edge` for the provided index.
     pub fn edge_mut(&mut self, index: EdgeIndex) -> Option<&mut Edge> {
-        if index == INVALID_COMPONENT_INDEX {
-            None
+        if index.is_valid() {
+            self.edge_list.get_mut(index.0)
         } else {
-            self.edge_list.get_mut(index)
+            None
         }
     }
 
@@ -744,7 +747,7 @@ impl<'mesh> EdgeLoopVertices<'mesh> {
         EdgeLoopVertices {
             edge_list: edge_list,
             initial_index: index,
-            current_index: INVALID_COMPONENT_INDEX
+            current_index: EdgeIndex::default()
         }
     }
 }
@@ -753,20 +756,20 @@ impl<'mesh> Iterator for EdgeLoopVertices<'mesh> {
     type Item = VertexIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index == INVALID_COMPONENT_INDEX {
-            self.current_index = self.initial_index;
-            self.edge_list.get(self.current_index).map(|e| e.vertex_index)
-        } else {
-            self.edge_list.get(self.current_index)
+        if self.current_index.is_valid() {
+            self.edge_list.get(self.current_index.0)
                 .and_then(|last_edge| {
                     self.current_index = last_edge.next_index;
                     if self.current_index == self.initial_index {
                         None
                     } else {
-                        self.edge_list.get(self.current_index)
-                            .map(|current_edge| current_edge.vertex_index)
+                        self.edge_list.get(self.current_index.0)
+                            .map(|e| e.vertex_index)
                     }
                 })
+        } else {
+            self.current_index = self.initial_index;
+            self.edge_list.get(self.current_index.0).map(|e| e.vertex_index)
         }
     }
 }
@@ -783,7 +786,7 @@ impl<'mesh> EdgeLoop<'mesh> {
         EdgeLoop {
             edge_list: edge_list,
             initial_index: index,
-            current_index: INVALID_COMPONENT_INDEX
+            current_index: EdgeIndex::default()
         }
     }
 }
@@ -792,11 +795,8 @@ impl<'mesh> Iterator for EdgeLoop<'mesh> {
     type Item = EdgeIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current_index == INVALID_COMPONENT_INDEX {
-            self.current_index = self.initial_index;
-            Some(self.current_index)
-        } else {
-            self.edge_list.get(self.current_index).and_then(|current_edge| {
+        if self.current_index.is_valid() {
+            self.edge_list.get(self.current_index.0).and_then(|current_edge| {
                 self.current_index = current_edge.next_index;
                 if self.current_index == self.initial_index {
                     None
@@ -804,6 +804,9 @@ impl<'mesh> Iterator for EdgeLoop<'mesh> {
                     Some(self.current_index)
                 }
             })
+        } else {
+            self.current_index = self.initial_index;
+            Some(self.current_index)
         }
     }
 }

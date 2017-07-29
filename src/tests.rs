@@ -16,6 +16,14 @@ fn basic_debug_printing() {
 }
 
 #[test]
+fn index_types_are_invalid_by_default() {
+    let vert = EdgeIndex::default();
+    let edge = EdgeIndex::default();
+    assert!(!vert.is_valid());
+    assert!(!edge.is_valid());
+}
+
+#[test]
 fn default_edge_is_invalid() {
     let edge = Edge::default();
     assert!(edge.is_valid() == false);
@@ -53,9 +61,9 @@ fn initial_mesh_has_default_elements() {
 #[test]
 fn can_iterate_over_faces() {
     let mut mesh = TestMesh::new();
-    mesh.face_list.push(Face::new(1));
-    mesh.face_list.push(Face::new(4));
-    mesh.face_list.push(Face::new(7));
+    mesh.face_list.push(Face::new(EdgeIndex(1)));
+    mesh.face_list.push(Face::new(EdgeIndex(4)));
+    mesh.face_list.push(Face::new(EdgeIndex(7)));
 
     assert!(mesh.face_list.len() == 4);
 
@@ -73,31 +81,31 @@ fn can_iterate_over_faces() {
 #[test]
 fn can_iterate_over_edges_of_face() {
     let mut mesh = TestMesh::new();
-    mesh.vertex_list.push(Vertex::new(1));
-    mesh.vertex_list.push(Vertex::new(2));
-    mesh.vertex_list.push(Vertex::new(3));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(1)));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(2)));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(3)));
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 2,
-        prev_index: 3,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(2),
+        prev_index: EdgeIndex(3),
         face_index: 1,
         vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 3,
-        prev_index: 1,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(3),
+        prev_index: EdgeIndex(1),
         face_index: 1,
         vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 1,
-        prev_index: 2,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(1),
+        prev_index: EdgeIndex(2),
         face_index: 1,
         vertex_index: VertexIndex(3)
     });
-    mesh.face_list.push(Face::new(1));
+    mesh.face_list.push(Face::new(EdgeIndex(1)));
 
     assert!(mesh.vertex_list.len() == 4);
     assert!(mesh.edge_list.len() == 4);
@@ -125,31 +133,31 @@ fn can_iterate_over_edges_of_face() {
 #[test]
 fn can_iterate_over_vertices_of_face() {
     let mut mesh = TestMesh::new();
-    mesh.vertex_list.push(Vertex::new(1));
-    mesh.vertex_list.push(Vertex::new(2));
-    mesh.vertex_list.push(Vertex::new(3));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(1)));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(2)));
+    mesh.vertex_list.push(Vertex::new(EdgeIndex(3)));
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 2,
-        prev_index: 3,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(2),
+        prev_index: EdgeIndex(3),
         face_index: 1,
         vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 3,
-        prev_index: 1,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(3),
+        prev_index: EdgeIndex(1),
         face_index: 1,
         vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
-        twin_index: INVALID_COMPONENT_INDEX,
-        next_index: 1,
-        prev_index: 2,
+        twin_index: EdgeIndex::default(),
+        next_index: EdgeIndex(1),
+        prev_index: EdgeIndex(2),
         face_index: 1,
         vertex_index: VertexIndex(3)
     });
-    mesh.face_list.push(Face::new(1));
+    mesh.face_list.push(Face::new(EdgeIndex(1)));
 
     assert!(mesh.vertex_list.len() == 4);
     assert!(mesh.edge_list.len() == 4);
@@ -188,22 +196,22 @@ fn can_add_triangles_to_mesh() {
     let f1 = mesh.add_triangle(v1, v2, v4);
     for eindex in mesh.edges(mesh.face(f1)) {
         let ref edge = mesh.edge(eindex);
-        assert!(edge.next_index != INVALID_COMPONENT_INDEX);
-        assert!(edge.prev_index != INVALID_COMPONENT_INDEX);
+        assert!(edge.next_index.is_valid());
+        assert!(edge.prev_index.is_valid());
     }
 
     let twin_a = mesh.face_fn(f1).edge().next().index;
-    assert!(twin_a != INVALID_COMPONENT_INDEX);
+    assert!(twin_a.is_valid());
 
     let f2 = mesh.add_adjacent_triangle(v3, twin_a);
     for eindex in mesh.edges(mesh.face(f1)) {
         let ref edge = mesh.edge(eindex);
-        assert!(edge.next_index != INVALID_COMPONENT_INDEX);
-        assert!(edge.prev_index != INVALID_COMPONENT_INDEX);
+        assert!(edge.next_index.is_valid());
+        assert!(edge.prev_index.is_valid());
     }
 
     let twin_b = mesh.face(f2).edge_index;
-    assert!(twin_b != INVALID_COMPONENT_INDEX);
+    assert!(twin_b.is_valid());
 
     assert!(mesh.edge(twin_a).twin_index == twin_b);
     assert!(mesh.edge(twin_b).twin_index == twin_a);
@@ -227,11 +235,11 @@ fn can_walk_and_get_mutable_ref() {
             let index = mesh.face_fn(f1).edge().vertex().index;
             mesh.vertex_mut(index).unwrap()
         };
-        assert!(vertex.edge_index == 1);
-        vertex.edge_index = INVALID_COMPONENT_INDEX;
+        assert!(vertex.edge_index.0 == 1);
+        vertex.edge_index = EdgeIndex::default();
     }
 
-    assert!(mesh.face_fn(f1).edge().vertex().edge().index == INVALID_COMPONENT_INDEX);
+    assert!(mesh.face_fn(f1).edge().vertex().edge().index.is_valid() == false);
 }
 
 #[test]
