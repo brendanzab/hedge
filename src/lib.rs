@@ -3,6 +3,10 @@
 //! An index based half-edge mesh implementation.
 //!
 
+// TODO: Result types for error handling?
+
+extern crate cgmath;
+
 use std::fmt;
 
 
@@ -426,11 +430,16 @@ impl Mesh {
     }
 
     pub fn remove_vertex(&mut self, index: VertexIndex) {
+        // TODO: In order to remove a vertex you need to circulate over
+        //       all connected edges and either remove them, or refuse
+        //       remove this vertex until those edges are removed first.
         unimplemented!()
     }
 
     // TODO: dissolve_vertex
 
+    // TODO: Looking over this I am definitely missing a bunch of edge cases if
+    //       I don't ensure that the related components are valid.
     pub fn remove_edge(&mut self, index: EdgeIndex) {
         debug_assert!(index != INVALID_COMPONENT_INDEX);
         let removed_edge = self.edge_list.swap_remove(index);
