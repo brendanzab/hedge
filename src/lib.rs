@@ -74,12 +74,28 @@ pub struct Edge {
     pub vertex_index: VertexIndex,
 }
 
+impl Edge {
+    /// Returns true when this edge has no twin.
+    pub fn is_boundary(&self) -> bool {
+        self.twin_index == INVALID_COMPONENT_INDEX
+    }
+
+    /// Returns true when this edge has a previous and next edge.
+    pub fn is_connected(&self) -> bool {
+        self.next_index != INVALID_COMPONENT_INDEX &&
+            self.prev_index != INVALID_COMPONENT_INDEX
+    }
+}
+
 impl Validation for Edge {
     /// An edge is generally considered "valid" as long as it has a
-    /// vertex and a face index other than `INVALID_COMPONENT_INDEX`
+    /// vertex and a face index other than `INVALID_COMPONENT_INDEX`,
+    /// and "is connected".
     fn is_valid(&self) -> bool {
         self.vertex_index != INVALID_COMPONENT_INDEX &&
-            self.face_index != INVALID_COMPONENT_INDEX
+            self.face_index != INVALID_COMPONENT_INDEX &&
+            self.prev_index != INVALID_COMPONENT_INDEX &&
+            self.next_index != INVALID_COMPONENT_INDEX
     }
 }
 
