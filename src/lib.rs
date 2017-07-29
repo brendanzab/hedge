@@ -414,11 +414,28 @@ impl Mesh {
     }
 
     pub fn remove_edge(&mut self, index: EdgeIndex) {
+        debug_assert!(index != INVALID_COMPONENT_INDEX);
+        let removed_edge = self.edge_list.swap_remove(index);
         unimplemented!()
     }
 
     pub fn remove_face(&mut self, index: FaceIndex) {
-        unimplemented!()
+        debug_assert!(index != INVALID_COMPONENT_INDEX);
+        let removed_face = self.face_list.swap_remove(index);
+
+        let edges_of_removed: Vec<EdgeIndex> =
+            EdgeLoop::new(removed_face.edge_index, &self.edge_list).collect();
+        for eindex in edges_of_removed {
+            self.edge_mut(eindex).map(|e| e.face_index = INVALID_COMPONENT_INDEX);
+        }
+
+        let edges_of_swapped: Vec<EdgeIndex> = {
+            let swapped_face = self.face(index);
+            self.edges(swapped_face).collect()
+        };
+        for eindex in edges_of_swapped {
+            self.edge_mut(eindex).map(|e| e.face_index = index);
+        }
     }
 
     /// Creates a new face and associated edges with the given vertex indices.
