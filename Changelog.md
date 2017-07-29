@@ -2,6 +2,8 @@
 
 ## 0.0.9
 
+`EdgeIndex`, `FaceIndex`, and `VertexIndex` are now structs instead of type aliases.
+
 ## 0.0.8
 
 - Added method `Edge::is_boundary`
@@ -20,16 +22,6 @@
 - Added `Validation` implementations for the function set structs
 - Added method `Mesh::assign_face_to_loop`
 - Added method `Mesh::add_polygon`
-
-### `Mesh::assign_face_to_loop`
-
-This method updates any edge in a loop with the specified face index.
-
-### `Mesh::add_polygon`
-
-This method takes a slice of `VertexIndex`s and creates a new edge loop and face.
-When the slice is only 3 items long it'll just use `Mesh::add_triangle`.
-
 
 ## 0.0.6 - 0.0.1
 
