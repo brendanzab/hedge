@@ -81,21 +81,21 @@ fn can_iterate_over_edges_of_face() {
         next_index: 2,
         prev_index: 3,
         face_index: 1,
-        vertex_index: 1
+        vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
         twin_index: INVALID_COMPONENT_INDEX,
         next_index: 3,
         prev_index: 1,
         face_index: 1,
-        vertex_index: 2
+        vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
         twin_index: INVALID_COMPONENT_INDEX,
         next_index: 1,
         prev_index: 2,
         face_index: 1,
-        vertex_index: 3
+        vertex_index: VertexIndex(3)
     });
     mesh.face_list.push(Face::new(1));
 
@@ -133,21 +133,21 @@ fn can_iterate_over_vertices_of_face() {
         next_index: 2,
         prev_index: 3,
         face_index: 1,
-        vertex_index: 1
+        vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
         twin_index: INVALID_COMPONENT_INDEX,
         next_index: 3,
         prev_index: 1,
         face_index: 1,
-        vertex_index: 2
+        vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
         twin_index: INVALID_COMPONENT_INDEX,
         next_index: 1,
         prev_index: 2,
         face_index: 1,
-        vertex_index: 3
+        vertex_index: VertexIndex(3)
     });
     mesh.face_list.push(Face::new(1));
 
@@ -165,7 +165,7 @@ fn can_iterate_over_vertices_of_face() {
         faces_iterated_over += 1;
 
         for vertex_index in mesh.vertices(face) {
-            assert!(vertex_index != INVALID_COMPONENT_INDEX);
+            assert!(vertex_index.is_valid());
             let vertex = mesh.vertex(vertex_index);
             assert!(vertex.is_valid());
             vertices_iterated_over += 1;
