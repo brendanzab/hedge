@@ -429,11 +429,79 @@ impl Mesh {
         unimplemented!()
     }
 
+    // TODO: dissolve_vertex
+
     pub fn remove_edge(&mut self, index: EdgeIndex) {
         debug_assert!(index != INVALID_COMPONENT_INDEX);
         let removed_edge = self.edge_list.swap_remove(index);
-        unimplemented!()
+
+        // Update components affected by removal
+        if let Some(ref mut next) = self.edge_mut(removed_edge.next_index) {
+            next.prev_index = INVALID_COMPONENT_INDEX;
+        }
+        if let Some(ref mut prev) = self.edge_mut(removed_edge.prev_index) {
+            prev.next_index = INVALID_COMPONENT_INDEX;
+        }
+        if let Some(ref mut twin) = self.edge_mut(removed_edge.twin_index) {
+            twin.twin_index = INVALID_COMPONENT_INDEX;
+        }
+        if let Some(ref mut face) = self.face_mut(removed_edge.face_index) {
+            if face.edge_index == index {
+                face.edge_index = removed_edge.next_index;
+            }
+        }
+        // updating the vertex can be a little tricky
+        let vertex_edge_index = self.vertex(removed_edge.vertex_index).edge_index;
+        if vertex_edge_index == index {
+            let eindex = if removed_edge.is_boundary() {
+                // when this is a boundary edge, then we can check if our previous
+                // edge has a twin. When that's the case, the vertex of the twin
+                // of the previous edge should be this same vertex, so we can
+                // update the vertex with the index of that edge.
+                let vindex = self.edge_fn(removed_edge.prev_index).twin().vertex().index;
+                debug_assert!(removed_edge.vertex_index == vindex);
+                self.edge(removed_edge.prev_index).twin_index
+            } else {
+                // when this is not a boundary edge then the vertex of the twins
+                // next edge should be this same vertex.
+                let vindex = self.edge_fn(removed_edge.twin_index).next().vertex().index;
+                debug_assert!(removed_edge.vertex_index == vindex);
+                self.edge(removed_edge.twin_index).next_index
+            };
+            if let Some(ref mut vertex) = self.vertex_mut(removed_edge.vertex_index) {
+                vertex.edge_index = eindex;
+            }
+        }
+
+        // Update components affected by the swap
+        let next_index = self.edge(index).next_index;
+        if let Some(ref mut next) = self.edge_mut(next_index) {
+            next.prev_index = index;
+        }
+        let prev_index = self.edge(index).prev_index;
+        if let Some(ref mut prev) = self.edge_mut(prev_index) {
+            prev.next_index = index;
+        }
+        let twin_index = self.edge(index).twin_index;
+        if let Some(ref mut twin) = self.edge_mut(twin_index) {
+            twin.twin_index = index;
+        }
+        let swapped_index = self.edge_list.len();
+        let face_index = self.edge(index).face_index;
+        if let Some(ref mut face) = self.face_mut(face_index) {
+            if face.edge_index == swapped_index {
+                face.edge_index = index;
+            }
+        }
+        let swapped_vertex_index = self.edge(index).vertex_index;
+        if let Some(ref mut vertex) = self.vertex_mut(swapped_vertex_index) {
+            if vertex.edge_index == swapped_index {
+                vertex.edge_index = index;
+            }
+        }
     }
+
+    // TODO: dissolve_edge, collapse_edge
 
     pub fn remove_face(&mut self, index: FaceIndex) {
         debug_assert!(index != INVALID_COMPONENT_INDEX);
@@ -453,6 +521,8 @@ impl Mesh {
             self.edge_mut(eindex).map(|e| e.face_index = index);
         }
     }
+
+    // TODO: dissolve_face, collapse_face
 
     /// Creates a new face and associated edges with the given vertex indices.
     /// Returns the index of the newly added face.
