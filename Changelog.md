@@ -1,6 +1,16 @@
 # Hedge Changelog
 
+## 0.0.9
+
 ## 0.0.8
+
+- Added method `Edge::is_boundary`
+- Added method `Edge::is_connected`
+- Added method `Mesh::remove_face`
+- Added method `Mesh::remove_edge`
+- Added *unimplemented* method `Mesh::remove_vertex`
+- Added cgmath dependency
+- Moved repo to github
 
 ## 0.0.7
 
