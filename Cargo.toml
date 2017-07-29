@@ -5,14 +5,15 @@ authors = ["Chip Collier <photex@gmail.com>"]
 
 description = "An index based half-edge mesh implementation."
 
-repository = "https://github.com/photex/hedge"
 
 keywords = ["halfedge", "half-edge", "mesh", "graphics", "meshes"]
 categories = ["data-structures"]
 
 license = "MPL-2.0"
 
-# crates will do this automatically!
-#documentation = "https://docs.rs/hedge"
+documentation = "https://docs.rs/hedge"
+homepage = "https://github.com/photex/hedge"
+repository = "https://github.com/photex/hedge"
 
 [dependencies]
+cgmath = "0.14.1"
