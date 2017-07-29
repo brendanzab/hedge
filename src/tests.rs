@@ -88,21 +88,21 @@ fn can_iterate_over_edges_of_face() {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(2),
         prev_index: EdgeIndex(3),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(3),
         prev_index: EdgeIndex(1),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(1),
         prev_index: EdgeIndex(2),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(3)
     });
     mesh.face_list.push(Face::new(EdgeIndex(1)));
@@ -140,21 +140,21 @@ fn can_iterate_over_vertices_of_face() {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(2),
         prev_index: EdgeIndex(3),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(1)
     });
     mesh.edge_list.push(Edge {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(3),
         prev_index: EdgeIndex(1),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(2)
     });
     mesh.edge_list.push(Edge {
         twin_index: EdgeIndex::default(),
         next_index: EdgeIndex(1),
         prev_index: EdgeIndex(2),
-        face_index: 1,
+        face_index: FaceIndex(1),
         vertex_index: VertexIndex(3)
     });
     mesh.face_list.push(Face::new(EdgeIndex(1)));
@@ -167,7 +167,7 @@ fn can_iterate_over_vertices_of_face() {
     let mut vertices_iterated_over = 0;
 
     for face_index in mesh.faces() {
-        assert!(face_index != INVALID_COMPONENT_INDEX);
+        assert!(face_index.is_valid());
         let face = mesh.face(face_index);
         assert!(face.is_valid());
         faces_iterated_over += 1;

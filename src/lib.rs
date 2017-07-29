@@ -41,8 +41,14 @@ impl Validation for EdgeIndex {
     }
 }
 
-/// Type alias for indices into face storage
-pub type FaceIndex = usize;
+#[derive(Default, Debug, PartialEq, PartialOrd, Clone, Copy)]
+pub struct FaceIndex(usize);
+
+impl Validation for FaceIndex {
+    fn is_valid(&self) -> bool {
+        self.0 != INVALID_COMPONENT_INDEX
+    }
+}
 
 
 /// Represents the point where two edges meet.
@@ -68,7 +74,7 @@ impl Validation for Vertex {
     /// other than `INVALID_COMPONENT_INDEX`
     fn is_valid(&self) -> bool {
         self.edge_index.is_valid() /*&&
-            self.attr_index != INVALID_COMPONENT_INDEX*/
+            self.attr_index.is_valid()*/
     }
 }
 
@@ -108,7 +114,7 @@ impl Validation for Edge {
     /// and "is connected".
     fn is_valid(&self) -> bool {
         self.vertex_index.is_valid() &&
-            self.face_index != INVALID_COMPONENT_INDEX &&
+            self.face_index.is_valid() &&
             self.prev_index.is_valid() &&
             self.next_index.is_valid()
     }
@@ -326,7 +332,7 @@ impl Mesh {
     ///
     /// _In debug builds we assert that each index provided is valid._
     pub fn assign_face_to_loop(&mut self, face_index: FaceIndex, edge_index: EdgeIndex) {
-        debug_assert!(face_index != INVALID_COMPONENT_INDEX);
+        debug_assert!(face_index.is_valid());
         debug_assert!(edge_index.is_valid());
         if let Some(ref mut face) = self.face_mut(face_index) {
             face.edge_index = edge_index;
@@ -348,7 +354,7 @@ impl Mesh {
             twin_index: EdgeIndex::default(),
             next_index: EdgeIndex::default(),
             prev_index: EdgeIndex::default(),
-            face_index: INVALID_COMPONENT_INDEX,
+            face_index: FaceIndex::default(),
             vertex_index: vert
         });
         if let Some(vertex) = self.vertex_mut(vert) {
@@ -426,10 +432,8 @@ impl Mesh {
     /// _In debug builds we assert that the result is a valid index and
     /// that the face was added to the list._
     pub fn add_face(&mut self, face: Face) -> FaceIndex {
-        let result: FaceIndex = self.face_list.len();
-        debug_assert!(result != INVALID_COMPONENT_INDEX);
+        let result = FaceIndex(self.face_list.len());
         self.face_list.push(face);
-        debug_assert!(result == self.face_list.len() - 1);
         return result;
     }
 
@@ -517,13 +521,13 @@ impl Mesh {
     // TODO: dissolve_edge, collapse_edge
 
     pub fn remove_face(&mut self, index: FaceIndex) {
-        debug_assert!(index != INVALID_COMPONENT_INDEX);
-        let removed_face = self.face_list.swap_remove(index);
+        debug_assert!(index.is_valid());
+        let removed_face = self.face_list.swap_remove(index.0);
 
         let edges_of_removed: Vec<EdgeIndex> =
             EdgeLoop::new(removed_face.edge_index, &self.edge_list).collect();
         for eindex in edges_of_removed {
-            self.edge_mut(eindex).map(|e| e.face_index = INVALID_COMPONENT_INDEX);
+            self.edge_mut(eindex).map(|e| e.face_index = FaceIndex::default());
         }
 
         let edges_of_swapped: Vec<EdgeIndex> = {
@@ -655,7 +659,7 @@ impl Mesh {
     }
 
     pub fn face(&self, index: FaceIndex) -> &Face {
-        if let Some(result) = self.face_list.get(index) {
+        if let Some(result) = self.face_list.get(index.0) {
             result
         } else {
             &self.face_list[0]
@@ -682,10 +686,10 @@ impl Mesh {
 
     /// Obtains a mutable reference to the `Face` for the provided index.
     pub fn face_mut(&mut self, index: FaceIndex) -> Option<&mut Face> {
-        if index == INVALID_COMPONENT_INDEX {
-            None
+        if index.is_valid() {
+            self.face_list.get_mut(index.0)
         } else {
-            self.face_list.get_mut(index)
+            None
         }
     }
 
@@ -824,7 +828,7 @@ impl Faces {
     pub fn new(face_count: usize) -> Faces {
         Faces {
             face_count: face_count,
-            previous_index: 0
+            previous_index: FaceIndex::default()
         }
     }
 }
@@ -834,8 +838,8 @@ impl Iterator for Faces {
     type Item = FaceIndex;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.previous_index += 1;
-        if self.previous_index >= self.face_count {
+        self.previous_index = FaceIndex(self.previous_index.0 + 1);
+        if self.previous_index.0 >= self.face_count {
             None
         } else {
             Some(self.previous_index)
