@@ -81,34 +81,13 @@ fn can_iterate_over_faces() {
 #[test]
 fn can_iterate_over_edges_of_face() {
     let mut mesh = TestMesh::new();
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(1)));
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(2)));
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(3)));
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(2),
-        prev_index: EdgeIndex(3),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(1)
-    });
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(3),
-        prev_index: EdgeIndex(1),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(2)
-    });
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(1),
-        prev_index: EdgeIndex(2),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(3)
-    });
-    mesh.face_list.push(Face::new(EdgeIndex(1)));
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+    let _face = mesh.add_triangle(v1, v2, v3);
 
     assert!(mesh.vertex_list.len() == 4);
-    assert!(mesh.edge_list.len() == 4);
+    assert!(mesh.edge_list.len() == 7);
     assert!(mesh.face_list.len() == 2);
 
     let mut faces_iterated_over = 0;
@@ -133,35 +112,10 @@ fn can_iterate_over_edges_of_face() {
 #[test]
 fn can_iterate_over_vertices_of_face() {
     let mut mesh = TestMesh::new();
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(1)));
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(2)));
-    mesh.vertex_list.push(Vertex::new(EdgeIndex(3)));
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(2),
-        prev_index: EdgeIndex(3),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(1)
-    });
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(3),
-        prev_index: EdgeIndex(1),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(2)
-    });
-    mesh.edge_list.push(Edge {
-        twin_index: EdgeIndex::default(),
-        next_index: EdgeIndex(1),
-        prev_index: EdgeIndex(2),
-        face_index: FaceIndex(1),
-        vertex_index: VertexIndex(3)
-    });
-    mesh.face_list.push(Face::new(EdgeIndex(1)));
-
-    assert!(mesh.vertex_list.len() == 4);
-    assert!(mesh.edge_list.len() == 4);
-    assert!(mesh.face_list.len() == 2);
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+    let _face = mesh.add_triangle(v1, v2, v3);
 
     let mut faces_iterated_over = 0;
     let mut vertices_iterated_over = 0;
@@ -203,7 +157,7 @@ fn can_add_triangles_to_mesh() {
     let twin_a = mesh.face_fn(f1).edge().next().index;
     assert!(twin_a.is_valid());
 
-    let f2 = mesh.add_adjacent_triangle(v3, twin_a);
+    let f2 = mesh.add_adjacent_triangle(twin_a, v3);
     for eindex in mesh.edges(mesh.face(f1)) {
         let ref edge = mesh.edge(eindex);
         assert!(edge.next_index.is_valid());
@@ -235,7 +189,8 @@ fn can_walk_and_get_mutable_ref() {
             let index = mesh.face_fn(f1).edge().vertex().index;
             mesh.vertex_mut(index).unwrap()
         };
-        assert!(vertex.edge_index.0 == 1);
+        println!("{:?}", vertex);
+        assert!(vertex.edge_index.0 == 6);
         vertex.edge_index = EdgeIndex::default();
     }
 
@@ -254,15 +209,15 @@ fn can_build_a_simple_mesh() {
     let f1 = mesh.add_triangle(v1, v2, v3);
     let f2 = {
         let edge_index = mesh.face_fn(f1).edge().index;
-        mesh.add_adjacent_triangle(v4, edge_index)
+        mesh.add_adjacent_triangle(edge_index, v4)
     };
     let f3 = {
         let edge_index = mesh.face_fn(f1).edge().next().index;
-        mesh.add_adjacent_triangle(v4, edge_index)
+        mesh.add_adjacent_triangle(edge_index, v4)
     };
     let f4 = {
         let edge_index = mesh.face_fn(f1).edge().prev().index;
-        mesh.add_adjacent_triangle(v4, edge_index)
+        mesh.add_adjacent_triangle(edge_index, v4)
     };
 
     // stitch f2-f3
@@ -309,7 +264,40 @@ fn can_build_a_simple_mesh() {
     let f2_prev_vert = mesh.face_fn(f2).edge().prev().vertex().index;
     let f3_prev_vert = mesh.face_fn(f3).edge().prev().vertex().index;
     let f4_prev_vert = mesh.face_fn(f4).edge().prev().vertex().index;
-    assert! {
-        (f2_prev_vert == v4) && (f3_prev_vert == v4) && (f4_prev_vert == v4)
+    assert!(f2_prev_vert == v4);
+    assert!(f3_prev_vert == v4);
+    assert!(f4_prev_vert == v4);
+}
+
+#[test]
+fn can_iterate_edges_around_vertex() {
+    let mut mesh = TestMesh::new();
+
+    let v1 = mesh.add_vertex(Vertex::default());
+    let v2 = mesh.add_vertex(Vertex::default());
+    let v3 = mesh.add_vertex(Vertex::default());
+    let v4 = mesh.add_vertex(Vertex::default());
+
+    let f1 = mesh.add_triangle(v1, v2, v4);
+    let twin_a = mesh.face_fn(f1).edge().next().index;
+    let f2 = mesh.add_adjacent_triangle(twin_a, v3);
+
+    println!("\n{:?}", mesh);
+
+    let vert = {
+        let eindex = mesh.face_fn(f1).edge().prev().index;
+        let vindex = mesh.face_fn(f1).edge().prev().vertex().index;
+        mesh.vertex(vindex)
     };
+    let mut edges_enumerated = 0;
+    for eindex in mesh.edges_around_vertex(vert) {
+        println!("{:?}", eindex);
+        assert! {
+            (eindex == EdgeIndex(3)) ||
+                (eindex == EdgeIndex(4)) ||
+                (eindex == EdgeIndex(10))
+        };
+        edges_enumerated += 1;
+    }
+    assert!(edges_enumerated == 3);
 }

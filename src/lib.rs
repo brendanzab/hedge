@@ -9,6 +9,9 @@ extern crate cgmath;
 
 use std::fmt;
 
+pub type EdgeList = Vec<Edge>;
+pub type VertexList = Vec<Vertex>;
+pub type FaceList = Vec<Face>;
 
 /// An interface for asserting the validity of components in the mesh.
 pub trait Validation {
@@ -97,11 +100,6 @@ pub struct Edge {
 }
 
 impl Edge {
-    /// Returns true when this edge has no twin.
-    pub fn is_boundary(&self) -> bool {
-        !self.twin_index.is_valid()
-    }
-
     /// Returns true when this edge has a previous and next edge.
     pub fn is_connected(&self) -> bool {
         self.next_index.is_valid() && self.prev_index.is_valid()
@@ -113,10 +111,7 @@ impl Validation for Edge {
     /// vertex and a face index other than `INVALID_COMPONENT_INDEX`,
     /// and "is connected".
     fn is_valid(&self) -> bool {
-        self.vertex_index.is_valid() &&
-            self.face_index.is_valid() &&
-            self.prev_index.is_valid() &&
-            self.next_index.is_valid()
+        self.vertex_index.is_valid() && self.twin_index.is_valid()
     }
 }
 
@@ -256,15 +251,15 @@ impl<'mesh> Validation for EdgeFn<'mesh> {
 /// Implements the fundamental storage operations and represents the principle
 /// grouping of all components.
 pub struct Mesh {
-    pub edge_list: Vec<Edge>,
-    pub vertex_list: Vec<Vertex>,
-    pub face_list: Vec<Face>
+    pub edge_list: EdgeList,
+    pub vertex_list: VertexList,
+    pub face_list: FaceList
 }
 
 impl fmt::Debug for Mesh {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Half-Edge Mesh {{ {} vertices, {} edges, {} faces }}",
-               self.vertex_list.len(), self.edge_list.len(), self.face_list.len())
+               self.num_vertices(), self.num_edges(), self.num_faces())
     }
 }
 
@@ -348,48 +343,52 @@ impl Mesh {
     /// Create a new edge from the specified vertex.
     ///
     /// _In debug builds we assert that the vertex index is not the default index._
-    pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
-        debug_assert!(vert.is_valid());
-        let result = self.add_edge(Edge {
-            twin_index: EdgeIndex::default(),
-            next_index: EdgeIndex::default(),
-            prev_index: EdgeIndex::default(),
-            face_index: FaceIndex::default(),
-            vertex_index: vert
-        });
-        if let Some(vertex) = self.vertex_mut(vert) {
-            vertex.edge_index = result;
-        }
-        return result;
-    }
+    // pub fn edge_from_vertex(&mut self, vert: VertexIndex) -> EdgeIndex {
+    //     debug_assert!(vert.is_valid());
+    //     let result = self.add_edge(Edge {
+    //         twin_index: EdgeIndex::default(),
+    //         next_index: EdgeIndex::default(),
+    //         prev_index: EdgeIndex::default(),
+    //         face_index: FaceIndex::default(),
+    //         vertex_index: vert
+    //     });
+    //     if let Some(vertex) = self.vertex_mut(vert) {
+    //         vertex.edge_index = result;
+    //     }
+    //     return result;
+    // }
 
     /// Create a new edge as a twin of the specified edge
     ///
     /// _In debug builds we assert that the twin index is not the default index
     /// and that the twins next index is not the default index (since we need
     /// that edge to find the correct vertex index)._
-    pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
-        debug_assert!(twin.is_valid());
-        debug_assert!(self.edge(twin).next_index.is_valid());
-        let vert = self.edge_fn(twin).next().vertex().index;
-        let result = self.edge_from_vertex(vert);
-        self.set_twin_edges(result, twin);
-        return result;
+    // pub fn edge_from_twin(&mut self, twin: EdgeIndex) -> EdgeIndex {
+    //     debug_assert!(twin.is_valid());
+    //     debug_assert!(self.edge(twin).next_index.is_valid());
+    //     let vert = self.edge_fn(twin).next().vertex().index;
+    //     let result = self.edge_from_vertex(vert);
+    //     self.set_twin_edges(result, twin);
+    //     return result;
+    // }
+
+    pub fn is_boundary_edge(&self, eindex: EdgeIndex) -> bool {
+        debug_assert!(eindex.is_valid());
+        debug_assert!(self.edge(eindex).is_valid());
+        debug_assert!(self.edge_fn(eindex).twin().is_valid());
+        self.edge_fn(eindex).twin().face().is_valid()
     }
 
     /// Create a new edge connected to the previous edge specified.
     ///
     /// _In debug builds we assert that the indices specified are valid._
-    pub fn extend_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex) -> EdgeIndex {
-        debug_assert!(vert.is_valid());
+    pub fn extend_edge_loop(&mut self, prev: EdgeIndex, vert: VertexIndex) -> EdgeIndex {
         debug_assert!(prev.is_valid());
-        let result = match vert.0 {
-            INVALID_COMPONENT_INDEX => {
-                debug_assert!(self.edge(prev).twin_index.is_valid());
-                let vert = self.edge_fn(prev).twin().vertex().index;
-                self.edge_from_vertex(vert)
-            },
-            _ => self.edge_from_vertex(vert)
+        debug_assert!(vert.is_valid());
+        let result = {
+            debug_assert!(self.edge(prev).twin_index.is_valid());
+            let prev_vert = self.edge_fn(prev).twin().vertex().index;
+            self.add_edge(prev_vert, vert)
         };
         self.connect_edges(prev, result);
         return result;
@@ -398,26 +397,57 @@ impl Mesh {
     /// Create a new edge, closing an edge loop, using the `prev` and `next` indices provided.
     ///
     /// _In debug builds we assert that all specified indices are valid._
-    pub fn close_edge_loop(&mut self, vert: VertexIndex, prev: EdgeIndex, next: EdgeIndex) -> EdgeIndex {
-        debug_assert! {
-            vert.is_valid() &&
-                prev.is_valid() &&
-                next.is_valid()
-        };
-        let result = self.edge_from_vertex(vert);
+    pub fn close_edge_loop(&mut self, prev: EdgeIndex, next: EdgeIndex) -> EdgeIndex {
+        debug_assert!(prev.is_valid());
+        debug_assert!(next.is_valid());
+        let vindex_a = self.edge_fn(prev).twin().vertex().index;
+        let vindex_b = self.edge_fn(next).vertex().index;
+        let result = self.add_edge(vindex_a, vindex_b);
         self.connect_edges(prev, result);
         self.connect_edges(result, next);
         return result;
     }
 
-    /// Adds the provided `Edge` to the mesh and returns it's `EdgeIndex`
+    /// Inserts the provided `Edge` into the mesh and returns it's `EdgeIndex`
     ///
     /// _In debug builds we assert that the result is a valid index and
     /// that the edge was added to the list._
-    pub fn add_edge(&mut self, edge: Edge) -> EdgeIndex {
+    pub fn insert_edge(&mut self, edge: Edge) -> EdgeIndex {
         let result = EdgeIndex(self.edge_list.len());
         self.edge_list.push(edge);
         return result;
+    }
+
+    pub fn add_edge(&mut self, a: VertexIndex, b: VertexIndex) -> EdgeIndex {
+        let eindex_a = EdgeIndex(self.edge_list.len());
+        let eindex_b = EdgeIndex(eindex_a.0 + 1);
+
+        let edge_a = Edge {
+            twin_index: eindex_b,
+            next_index: EdgeIndex::default(),
+            prev_index: EdgeIndex::default(),
+            face_index: FaceIndex::default(),
+            vertex_index: a
+        };
+        if let Some(ref mut vert) = self.vertex_mut(a) {
+            vert.edge_index = eindex_a;
+        }
+
+        let edge_b = Edge {
+            twin_index: eindex_a,
+            next_index: EdgeIndex::default(),
+            prev_index: EdgeIndex::default(),
+            face_index: FaceIndex::default(),
+            vertex_index: b
+        };
+        if let Some(ref mut vert) = self.vertex_mut(b) {
+            vert.edge_index = eindex_b;
+        }
+
+        self.edge_list.push(edge_a);
+        self.edge_list.push(edge_b);
+
+        return eindex_a;
     }
 
     /// Adds the provided `Vertex` to the mesh and returns it's `VertexIndex`
@@ -468,27 +498,7 @@ impl Mesh {
             }
         }
         // updating the vertex can be a little tricky
-        let vertex_edge_index = self.vertex(removed_edge.vertex_index).edge_index;
-        if vertex_edge_index == index {
-            let eindex = if removed_edge.is_boundary() {
-                // when this is a boundary edge, then we can check if our previous
-                // edge has a twin. When that's the case, the vertex of the twin
-                // of the previous edge should be this same vertex, so we can
-                // update the vertex with the index of that edge.
-                let vindex = self.edge_fn(removed_edge.prev_index).twin().vertex().index;
-                debug_assert!(removed_edge.vertex_index == vindex);
-                self.edge(removed_edge.prev_index).twin_index
-            } else {
-                // when this is not a boundary edge then the vertex of the twins
-                // next edge should be this same vertex.
-                let vindex = self.edge_fn(removed_edge.twin_index).next().vertex().index;
-                debug_assert!(removed_edge.vertex_index == vindex);
-                self.edge(removed_edge.twin_index).next_index
-            };
-            if let Some(ref mut vertex) = self.vertex_mut(removed_edge.vertex_index) {
-                vertex.edge_index = eindex;
-            }
-        }
+        // TODO: Any affected vertex needs to be updated.
 
         // Update components affected by the swap
         let next_index = self.edge(index).next_index;
@@ -550,9 +560,9 @@ impl Mesh {
         debug_assert!(b.is_valid());
         debug_assert!(c.is_valid());
 
-        let e1 = self.edge_from_vertex(a);
-        let e2 = self.extend_edge_loop(b, e1);
-        let e3 = self.close_edge_loop(c, e2, e1);
+        let e1 = self.add_edge(a, b);
+        let e2 = self.extend_edge_loop(e1, c);
+        let e3 = self.close_edge_loop(e2, e1);
 
         let result = self.add_face(Face::new(e1));
 
@@ -567,14 +577,14 @@ impl Mesh {
     /// Returns the index of the newly added face.
     ///
     /// _In debug builds we assert that the all provided indices are valid._
-    pub fn add_adjacent_triangle(&mut self, c: VertexIndex, twin_edge: EdgeIndex) -> FaceIndex {
-        debug_assert!(c.is_valid());
-        debug_assert!(twin_edge.is_valid());
+    pub fn add_adjacent_triangle(&mut self, root_edge: EdgeIndex, vindex: VertexIndex) -> FaceIndex {
+        debug_assert!(vindex.is_valid());
+        debug_assert!(root_edge.is_valid());
+        debug_assert!(self.edge_fn(root_edge).twin().is_valid());
 
-        let e1 = self.edge_from_twin(twin_edge);
-        let b = self.edge(twin_edge).vertex_index;
-        let e2 = self.extend_edge_loop(b, e1);
-        let e3 = self.close_edge_loop(c, e2, e1);
+        let e1 = self.edge_fn(root_edge).twin().index;
+        let e2 = self.extend_edge_loop(e1, vindex);
+        let e3 = self.close_edge_loop(e2, e1);
 
         let result = self.add_face(Face::new(e1));
 
@@ -602,12 +612,12 @@ impl Mesh {
             vert_count => {
                 let face_index = self.add_face(Face::default());
 
-                let root_edge_index = self.edge_from_vertex(verts[0]);
+                let root_edge_index = self.add_edge(verts[0], verts[1]);
                 let mut last_edge_index = root_edge_index;
-                for i in 1 .. vert_count - 2 {
-                    last_edge_index = self.extend_edge_loop(verts[i], last_edge_index);
+                for i in 2 .. vert_count - 2 {
+                    last_edge_index = self.extend_edge_loop(last_edge_index, verts[i]);
                 }
-                self.close_edge_loop(verts[vert_count-1], last_edge_index, root_edge_index);
+                self.close_edge_loop(last_edge_index, root_edge_index);
 
                 self.assign_face_to_loop(face_index, root_edge_index);
 
@@ -658,6 +668,11 @@ impl Mesh {
         EdgeLoopVertices::new(face.edge_index, &self.edge_list)
     }
 
+    pub fn edges_around_vertex(&self, vertex: &Vertex) -> EdgesAroundVertex {
+        EdgesAroundVertex::new(vertex.edge_index, &self)
+    }
+
+    /// Retrieve an immutable reference to the face specified by `index`
     pub fn face(&self, index: FaceIndex) -> &Face {
         if let Some(result) = self.face_list.get(index.0) {
             result
@@ -736,18 +751,30 @@ impl Mesh {
             None
         }
     }
+
+    pub fn num_vertices(&self) -> usize {
+        self.vertex_list.len() - 1
+    }
+
+    pub fn num_faces(&self) -> usize {
+        self.face_list.len() - 1
+    }
+
+    pub fn num_edges(&self) -> usize {
+        self.edge_list.len() - 1
+    }
 }
 
 /// An iterator that walks an edge loop around a face returning each `VertexIndex` in the loop.
 // yeah yeah yeah, I know this is copypasta...
 pub struct EdgeLoopVertices<'mesh> {
-    edge_list: &'mesh Vec<Edge>,
+    edge_list: &'mesh EdgeList,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
 impl<'mesh> EdgeLoopVertices<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoopVertices {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh EdgeList) -> EdgeLoopVertices {
         EdgeLoopVertices {
             edge_list: edge_list,
             initial_index: index,
@@ -780,13 +807,13 @@ impl<'mesh> Iterator for EdgeLoopVertices<'mesh> {
 
 /// An iterator that walks an edge loop around a face returning each `EdgeIndex` in the loop.
 pub struct EdgeLoop<'mesh> {
-    edge_list: &'mesh Vec<Edge>,
+    edge_list: &'mesh EdgeList,
     initial_index: EdgeIndex,
     current_index: EdgeIndex
 }
 
 impl<'mesh> EdgeLoop<'mesh> {
-    pub fn new(index: EdgeIndex, edge_list: &'mesh Vec<Edge>) -> EdgeLoop {
+    pub fn new(index: EdgeIndex, edge_list: &'mesh EdgeList) -> EdgeLoop {
         EdgeLoop {
             edge_list: edge_list,
             initial_index: index,
@@ -811,6 +838,37 @@ impl<'mesh> Iterator for EdgeLoop<'mesh> {
         } else {
             self.current_index = self.initial_index;
             Some(self.current_index)
+        }
+    }
+}
+
+pub struct EdgesAroundVertex<'mesh> {
+    mesh: &'mesh Mesh,
+    last_index: EdgeIndex,
+    next_index: EdgeIndex,
+}
+
+impl<'mesh> EdgesAroundVertex<'mesh> {
+    pub fn new(edge_index: EdgeIndex, mesh: &'mesh Mesh) -> EdgesAroundVertex<'mesh> {
+        EdgesAroundVertex {
+            mesh: mesh,
+            last_index: EdgeIndex::default(),
+            next_index: edge_index,
+        }
+    }
+}
+
+impl<'mesh> Iterator for EdgesAroundVertex<'mesh> {
+    type Item = EdgeIndex;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.last_index = self.next_index;
+        if self.last_index.is_valid() {
+            self.next_index = self.mesh.edge_fn(self.last_index)
+                .prev().twin().index;
+            Some(self.last_index)
+        } else {
+            None
         }
     }
 }
